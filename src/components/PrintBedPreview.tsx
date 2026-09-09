@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ZoomIn, ZoomOut, Maximize, Move, Layers, Eye, ShieldAlert, Sparkles, CheckCircle2, ArrowUpToLine, AlignCenter } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, Move, Layers, Eye, ShieldAlert, Sparkles, CheckCircle2, ArrowUpToLine, AlignCenter, ArrowUp, ArrowDown } from 'lucide-react';
 import { AlignmentSettings, CalibrationSettings, CardSideData } from '../types';
 import { calculateSlotCoordinates } from '../utils/printHelper';
 
@@ -118,6 +118,28 @@ export const PrintBedPreview: React.FC<PrintBedPreviewProps> = ({
                 <AlignCenter className="w-3 h-3" />
                 <span>Page Middle</span>
               </button>
+
+              <div className="flex items-center bg-slate-800 border border-slate-700 rounded text-[11px] overflow-hidden">
+                <button
+                  onClick={() => onUpdateOrigin(originXMm, Math.max(0, originYMm - 5))}
+                  className="px-2 py-1 text-slate-300 hover:text-white hover:bg-slate-700 flex items-center gap-0.5 transition"
+                  title="Move card Up 5mm"
+                >
+                  <ArrowUp className="w-3 h-3 text-emerald-400" />
+                  <span>Up 5mm</span>
+                </button>
+                <span className="px-1.5 py-1 font-mono text-[10px] text-amber-300 bg-slate-900 border-x border-slate-700">
+                  Y: {originYMm.toFixed(0)}
+                </span>
+                <button
+                  onClick={() => onUpdateOrigin(originXMm, Math.min(paperHeightMm - cardHeightMm, originYMm + 5))}
+                  className="px-2 py-1 text-slate-300 hover:text-white hover:bg-slate-700 flex items-center gap-0.5 transition"
+                  title="Move card Down 5mm"
+                >
+                  <ArrowDown className="w-3 h-3 text-emerald-400" />
+                  <span>Down 5mm</span>
+                </button>
+              </div>
             </>
           )}
           <button

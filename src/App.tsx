@@ -212,6 +212,7 @@ export default function App() {
               }}
               onResetWorkflow={handleResetWorkflow}
               onLoadSpecimenCards={handleLoadSpecimenCards}
+              onUpdateAlignment={(updated) => setAlignment((prev) => ({ ...prev, ...updated }))}
             />
 
             {/* Live Print Bed Simulation below workflow */}
@@ -348,6 +349,7 @@ export default function App() {
           alignment={alignment}
           calibration={calibration}
           onClose={() => setPreviewSide(null)}
+          onUpdateAlignment={(updated) => setAlignment((prev) => ({ ...prev, ...updated }))}
           onConfirmPrint={() => {
             if (previewSide === 'front') {
               handlePrintFront();

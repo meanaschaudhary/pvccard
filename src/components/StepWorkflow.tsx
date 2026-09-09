@@ -12,6 +12,9 @@ import {
   FileText,
   RotateCw,
   RefreshCw,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react';
 import { CardSideData, AlignmentSettings, CalibrationSettings, WorkflowStep } from '../types';
 import { loadPdfDocument, renderPdfPageToDataUrl } from '../utils/pdfHelper';
@@ -32,6 +35,7 @@ interface StepWorkflowProps {
   onGoToEditor: (side: 'front' | 'back') => void;
   onResetWorkflow: () => void;
   onLoadSpecimenCards: () => void;
+  onUpdateAlignment?: (updated: Partial<AlignmentSettings>) => void;
 }
 
 export const StepWorkflow: React.FC<StepWorkflowProps> = ({
@@ -49,6 +53,7 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
   onGoToEditor,
   onResetWorkflow,
   onLoadSpecimenCards,
+  onUpdateAlignment,
 }) => {
   const frontInputRef = useRef<HTMLInputElement>(null);
   const backInputRef = useRef<HTMLInputElement>(null);
@@ -318,6 +323,46 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
 
           {/* Action Buttons for Front */}
           <div className="space-y-3 pt-6">
+            {/* Quick Up/Down Page Placement Strip */}
+            <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs">
+              <div className="flex items-center gap-1.5 text-slate-700">
+                <ArrowUpDown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span className="font-semibold text-slate-700">Top Position:</span>
+                <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  {originYMm.toFixed(1)} mm
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextY = Math.max(0, originYMm - 2);
+                    onUpdateAlignment?.({ originYMm: nextY, topMarginMm: nextY, placementMode: 'top_center' });
+                  }}
+                  disabled={originYMm <= 0}
+                  className="px-2 py-1 bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 font-bold rounded-lg border border-slate-200 text-[11px] flex items-center gap-0.5 transition"
+                  title="Move card 2mm Up on page"
+                >
+                  <ArrowUp className="w-3 h-3 text-emerald-600" />
+                  <span>Up 2mm</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const maxY = Math.max(0, paperHeightMm - cardHeightMm);
+                    const nextY = Math.min(maxY, originYMm + 2);
+                    onUpdateAlignment?.({ originYMm: nextY, topMarginMm: nextY, placementMode: 'top_center' });
+                  }}
+                  disabled={originYMm >= paperHeightMm - cardHeightMm}
+                  className="px-2 py-1 bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 font-bold rounded-lg border border-slate-200 text-[11px] flex items-center gap-0.5 transition"
+                  title="Move card 2mm Down on page"
+                >
+                  <ArrowDown className="w-3 h-3 text-emerald-600" />
+                  <span>Down 2mm</span>
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
@@ -471,6 +516,46 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
 
           {/* Action Buttons for Back */}
           <div className="space-y-3 pt-6">
+            {/* Quick Up/Down Page Placement Strip */}
+            <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs">
+              <div className="flex items-center gap-1.5 text-slate-700">
+                <ArrowUpDown className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span className="font-semibold text-slate-700">Top Position:</span>
+                <span className="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  {originYMm.toFixed(1)} mm
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextY = Math.max(0, originYMm - 2);
+                    onUpdateAlignment?.({ originYMm: nextY, topMarginMm: nextY, placementMode: 'top_center' });
+                  }}
+                  disabled={originYMm <= 0}
+                  className="px-2 py-1 bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 font-bold rounded-lg border border-slate-200 text-[11px] flex items-center gap-0.5 transition"
+                  title="Move card 2mm Up on page"
+                >
+                  <ArrowUp className="w-3 h-3 text-emerald-600" />
+                  <span>Up 2mm</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const maxY = Math.max(0, paperHeightMm - cardHeightMm);
+                    const nextY = Math.min(maxY, originYMm + 2);
+                    onUpdateAlignment?.({ originYMm: nextY, topMarginMm: nextY, placementMode: 'top_center' });
+                  }}
+                  disabled={originYMm >= paperHeightMm - cardHeightMm}
+                  className="px-2 py-1 bg-white hover:bg-slate-100 disabled:opacity-40 text-slate-700 font-bold rounded-lg border border-slate-200 text-[11px] flex items-center gap-0.5 transition"
+                  title="Move card 2mm Down on page"
+                >
+                  <ArrowDown className="w-3 h-3 text-emerald-600" />
+                  <span>Down 2mm</span>
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
