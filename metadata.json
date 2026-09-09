@@ -1,0 +1,6 @@
+{
+  "name": "Aazmi PVC Card Printer",
+  "description": "Professional PVC ID card printing and precise manual double-sided alignment tool for Canon printers with high-resolution PDF rendering and calibration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
