@@ -13,6 +13,9 @@ import {
   ArrowUpToLine,
   AlignCenter,
   CheckCircle2,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpDown,
 } from 'lucide-react';
 import { AlignmentSettings, PaperSizeKey, BackFlipMode, BackSheetFlipType, PlacementMode } from '../types';
 import { CARD_SIZE_PRESETS, PAPER_SIZE_PRESETS } from '../constants/presets';
@@ -46,6 +49,10 @@ export const AlignmentControls: React.FC<AlignmentControlsProps> = ({
     backOffsetY,
     copies,
   } = alignment;
+
+  const centerOfA4X = Math.round(((paperWidthMm - cardWidthMm) / 2) * 10) / 10;
+  const currentX = typeof originXMm === 'number' && !isNaN(originXMm) ? originXMm : centerOfA4X;
+  const isCenteredX = Math.abs(currentX - centerOfA4X) < 0.2;
 
   const currentPlacementMode: PlacementMode =
     placementMode || (originYMm <= 40 ? 'top_center' : centerOnPage ? 'page_center' : 'custom');
@@ -507,6 +514,135 @@ export const AlignmentControls: React.FC<AlignmentControlsProps> = ({
                     : 'bg-white border-slate-300 text-slate-800'
                 }`}
               />
+            </div>
+          </div>
+
+          {/* Fine Left/Right Horizontal Nudge Tool */}
+          <div className="p-3 bg-white rounded-lg border border-slate-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                <ArrowLeft className="w-3.5 h-3.5 text-blue-600" />
+                <span>Horizontal Nudge (Left / Right)</span>
+                <ArrowRight className="w-3.5 h-3.5 text-blue-600" />
+              </span>
+              <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                X = {currentX.toFixed(1)} mm {isCenteredX ? '(Center)' : ''}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateAlignment({
+                    originXMm: Math.max(0, Math.round((currentX - 5) * 10) / 10),
+                    placementMode: 'custom',
+                    centerOnPage: false,
+                  })
+                }
+                className="px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold border border-slate-300"
+                title="Shift Left 5mm"
+              >
+                -5mm Left
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateAlignment({
+                    originXMm: Math.max(0, Math.round((currentX - 1) * 10) / 10),
+                    placementMode: 'custom',
+                    centerOnPage: false,
+                  })
+                }
+                className="px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-mono font-bold border border-slate-300"
+                title="Shift Left 1mm"
+              >
+                -1mm
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateAlignment({
+                    originXMm: Math.min(paperWidthMm - cardWidthMm, Math.round((currentX + 1) * 10) / 10),
+                    placementMode: 'custom',
+                    centerOnPage: false,
+                  })
+                }
+                className="px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-mono font-bold border border-slate-300"
+                title="Shift Right 1mm (Fixes left-shifted print)"
+              >
+                +1mm
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateAlignment({
+                    originXMm: Math.min(paperWidthMm - cardWidthMm, Math.round((currentX + 5) * 10) / 10),
+                    placementMode: 'custom',
+                    centerOnPage: false,
+                  })
+                }
+                className="px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 rounded font-bold border border-slate-300"
+                title="Shift Right 5mm"
+              >
+                +5mm Right
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateAlignment({
+                    originXMm: centerOfA4X,
+                    placementMode: 'top_center',
+                    centerOnPage: true,
+                  })
+                }
+                className={`px-2 py-1 text-xs rounded font-bold border transition flex items-center gap-1 ${
+                  isCenteredX
+                    ? 'bg-blue-600 text-white border-blue-700'
+                    : 'bg-white text-blue-700 border-blue-300 hover:bg-blue-50'
+                }`}
+                title="Center horizontally on sheet"
+              >
+                <AlignCenter className="w-3 h-3" />
+                <span>Center ({centerOfA4X.toFixed(1)}mm)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateAlignment({
+                    originXMm: centerOfA4X + 2.0,
+                    placementMode: 'custom',
+                    centerOnPage: false,
+                  })
+                }
+                className={`px-2 py-1 text-xs rounded font-bold border transition ${
+                  Math.abs(currentX - (centerOfA4X + 2.0)) < 0.2
+                    ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+                title="Nudge 2mm right to fix Canon printer feeding left"
+              >
+                +2mm (Fix Left Bias)
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateAlignment({
+                    originXMm: centerOfA4X + 4.0,
+                    placementMode: 'custom',
+                    centerOnPage: false,
+                  })
+                }
+                className={`px-2 py-1 text-xs rounded font-bold border transition ${
+                  Math.abs(currentX - (centerOfA4X + 4.0)) < 0.2
+                    ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+                title="Nudge 4mm right to fix Canon printer feeding left"
+              >
+                +4mm (Fix Left Bias)
+              </button>
             </div>
           </div>
 

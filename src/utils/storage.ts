@@ -44,6 +44,22 @@ export function loadActiveAlignment(): AlignmentSettings {
     if (!raw) return DEFAULT_ALIGNMENT;
     const parsed = JSON.parse(raw);
     const merged: AlignmentSettings = { ...DEFAULT_ALIGNMENT, ...parsed };
+
+    // Upgrade old 80x50mm die-cut default to real standard PVC CR-80 (85.6 × 54.0 mm)
+    if (merged.cardWidthMm === 80 && merged.cardHeightMm === 50) {
+      merged.cardWidthMm = 85.6;
+      merged.cardHeightMm = 54.0;
+      if (merged.centerOnPage || merged.placementMode === 'top_center') {
+        merged.originXMm = 62.2;
+      }
+    }
+
+    // Always enforce standard A4 if paperSizeKey is a4
+    if (merged.paperSizeKey === 'a4') {
+      merged.paperWidthMm = 210;
+      merged.paperHeightMm = 297;
+    }
+
     // If placementMode is undefined or if it has dead-center coordinates (X:65, Y:123.5), default to top_center
     if (!merged.placementMode || (merged.originYMm === 123.5 && merged.paperSizeKey === 'a4')) {
       merged.placementMode = 'top_center';

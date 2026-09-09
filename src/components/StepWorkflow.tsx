@@ -8,6 +8,9 @@ import {
   Sliders,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
+  ArrowLeftRight,
+  AlignCenter,
   FileCheck,
   FileText,
   RotateCw,
@@ -140,6 +143,57 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
   const backHasImage = Boolean(backData.sourceImageUrl || backData.croppedImageUrl);
   const isFrontDone = workflowStep === 'reinsert' || workflowStep === 'back' || workflowStep === 'completed';
 
+  const isActualPvcStandard = Math.abs(cardWidthMm - 85.6) < 0.2 && Math.abs(cardHeightMm - 54.0) < 0.2;
+  const isCompactDieCut = Math.abs(cardWidthMm - 80.0) < 0.2 && Math.abs(cardHeightMm - 50.0) < 0.2;
+  const maxYMm = Math.max(0, paperHeightMm - cardHeightMm);
+  const maxXMm = Math.max(0, paperWidthMm - cardWidthMm);
+  const centerOfA4X = Math.round(((paperWidthMm - cardWidthMm) / 2) * 10) / 10;
+  const centerOfA4Y = Math.round(((paperHeightMm - cardHeightMm) / 2) * 10) / 10;
+
+  const currentX = typeof originXMm === 'number' && !isNaN(originXMm) ? originXMm : centerOfA4X;
+  const isCenteredX = Math.abs(currentX - centerOfA4X) < 0.2;
+
+  const handleUpdateY = (newY: number) => {
+    if (!onUpdateAlignment) return;
+    const clamped = Math.max(0, Math.min(maxYMm, Math.round(newY * 10) / 10));
+    onUpdateAlignment({
+      originYMm: clamped,
+      topMarginMm: clamped,
+      placementMode: 'custom',
+    });
+  };
+
+  const handleNudgeY = (delta: number) => {
+    handleUpdateY(originYMm + delta);
+  };
+
+  const handleUpdateX = (newX: number) => {
+    if (!onUpdateAlignment) return;
+    const clamped = Math.max(0, Math.min(maxXMm, Math.round(newX * 10) / 10));
+    onUpdateAlignment({
+      originXMm: clamped,
+      placementMode: 'custom',
+    });
+  };
+
+  const handleNudgeX = (delta: number) => {
+    handleUpdateX(currentX + delta);
+  };
+
+  const handleCenterA4X = () => {
+    handleUpdateX(centerOfA4X);
+  };
+
+  const handleSetCardSize = (w: number, h: number) => {
+    if (!onUpdateAlignment) return;
+    const newOriginX = Math.round(((paperWidthMm - w) / 2) * 10) / 10;
+    onUpdateAlignment({
+      cardWidthMm: w,
+      cardHeightMm: h,
+      originXMm: newOriginX,
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Workflow Step Tracker Progress Bar */}
@@ -203,6 +257,254 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
               <RefreshCw className="w-3 h-3" />
               <span>Reset Flow</span>
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* QUICK CARD SIZE & A4 VERTICAL POSITIONING CONTROL BAR */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs">
+              <Sliders className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <h4 className="text-xs font-bold text-slate-900">
+                A4 Print Page &amp; PVC Dimensions
+              </h4>
+              <p className="text-[11px] text-slate-500">
+                Fixed 210 × 297 mm A4 sheet • Move card up or down on page before printing
+              </p>
+            </div>
+          </div>
+
+          {/* Quick PVC Card Size Selector */}
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200">
+            <span className="text-[11px] font-semibold text-slate-500 px-2">PVC Size:</span>
+            <button
+              type="button"
+              onClick={() => handleSetCardSize(85.6, 54.0)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition ${
+                isActualPvcStandard
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-transparent text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              Actual PVC (85.6 × 54 mm)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSetCardSize(80.0, 50.0)}
+              className={`px-2.5 py-1 text-xs font-bold rounded-lg transition ${
+                isCompactDieCut
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'bg-transparent text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              Compact (80 × 50 mm)
+            </button>
+          </div>
+        </div>
+
+        {/* Left & Right on A4 Page (Horizontal Position) */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-1">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
+                <span>A4 Horizontal Position (Left/Right):</span>
+              </span>
+              <span className="font-mono text-xs font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-300">
+                X = {currentX.toFixed(1)} mm {isCenteredX ? '(Center)' : ''}
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-400">
+              (from left of A4 sheet)
+            </span>
+          </div>
+
+          {/* Stepper Buttons and Presets for X */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleNudgeX(-5)}
+                disabled={currentX <= 0}
+                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-800 text-xs font-bold rounded-lg border border-slate-300 flex items-center gap-1 transition"
+                title="Move Left 5 mm on A4"
+              >
+                <ArrowLeft className="w-3 h-3 text-blue-600" />
+                <span>-5mm Left</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNudgeX(-1)}
+                disabled={currentX <= 0}
+                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-mono font-bold rounded-lg border border-slate-300 transition"
+                title="Move Left 1 mm on A4"
+              >
+                -1
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNudgeX(1)}
+                disabled={currentX >= maxXMm}
+                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-mono font-bold rounded-lg border border-slate-300 transition"
+                title="Move Right 1 mm on A4 (Fix left shift)"
+              >
+                +1
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNudgeX(5)}
+                disabled={currentX >= maxXMm}
+                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-800 text-xs font-bold rounded-lg border border-slate-300 flex items-center gap-1 transition"
+                title="Move Right 5 mm on A4"
+              >
+                <span>+5mm Right</span>
+                <ArrowRight className="w-3 h-3 text-blue-600" />
+              </button>
+            </div>
+
+            {/* Quick Horizontal Presets */}
+            <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
+              <button
+                type="button"
+                onClick={handleCenterA4X}
+                className={`px-2 py-1 text-[11px] font-medium rounded-lg border transition flex items-center gap-1 ${
+                  isCenteredX
+                    ? 'bg-blue-600 text-white border-blue-700 font-bold'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+                title="Center card horizontally on A4"
+              >
+                <AlignCenter className="w-3 h-3" />
+                <span>Center ({centerOfA4X.toFixed(1)}mm)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleUpdateX(centerOfA4X + 2.0)}
+                className={`px-2 py-1 text-[11px] font-medium rounded-lg border transition ${
+                  Math.abs(currentX - (centerOfA4X + 2.0)) < 0.2
+                    ? 'bg-amber-500 text-slate-950 border-amber-600 font-bold'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+                title="Shift 2mm Right to fix printer left-shift bias"
+              >
+                +2mm Right (Fix)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleUpdateX(centerOfA4X + 4.0)}
+                className={`px-2 py-1 text-[11px] font-medium rounded-lg border transition ${
+                  Math.abs(currentX - (centerOfA4X + 4.0)) < 0.2
+                    ? 'bg-amber-500 text-slate-950 border-amber-600 font-bold'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+                title="Shift 4mm Right to fix printer left-shift bias"
+              >
+                +4mm Right (Fix)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Up & Down on A4 Page Controls */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                <ArrowUpDown className="w-3.5 h-3.5 text-amber-500" />
+                <span>A4 Vertical Position (Up/Down):</span>
+              </span>
+              <span className="font-mono text-xs font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-300">
+                Y = {originYMm.toFixed(1)} mm
+              </span>
+            </div>
+            <span className="text-[11px] text-slate-400">
+              (from top of A4 sheet)
+            </span>
+          </div>
+
+          {/* Stepper Buttons and Presets */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleNudgeY(-5)}
+                disabled={originYMm <= 0}
+                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-800 text-xs font-bold rounded-lg border border-slate-300 flex items-center gap-1 transition"
+                title="Move Up 5 mm on A4"
+              >
+                <ArrowUp className="w-3 h-3 text-emerald-600" />
+                <span>-5mm Up</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNudgeY(-1)}
+                disabled={originYMm <= 0}
+                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-mono font-bold rounded-lg border border-slate-300 transition"
+                title="Move Up 1 mm on A4"
+              >
+                -1
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNudgeY(1)}
+                disabled={originYMm >= maxYMm}
+                className="px-2 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-mono font-bold rounded-lg border border-slate-300 transition"
+                title="Move Down 1 mm on A4"
+              >
+                +1
+              </button>
+              <button
+                type="button"
+                onClick={() => handleNudgeY(5)}
+                disabled={originYMm >= maxYMm}
+                className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-800 text-xs font-bold rounded-lg border border-slate-300 flex items-center gap-1 transition"
+                title="Move Down 5 mm on A4"
+              >
+                <ArrowDown className="w-3 h-3 text-emerald-600" />
+                <span>+5mm Down</span>
+              </button>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1 pl-2 border-l border-slate-200">
+              <button
+                type="button"
+                onClick={() => handleUpdateY(20.0)}
+                className={`px-2 py-1 text-[11px] font-medium rounded-lg border transition ${
+                  originYMm === 20
+                    ? 'bg-emerald-600 text-white border-emerald-700 font-bold'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                20mm Top
+              </button>
+              <button
+                type="button"
+                onClick={() => handleUpdateY(50.0)}
+                className={`px-2 py-1 text-[11px] font-medium rounded-lg border transition ${
+                  originYMm === 50
+                    ? 'bg-amber-500 text-slate-950 border-amber-600 font-bold'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                50mm
+              </button>
+              <button
+                type="button"
+                onClick={() => handleUpdateY(centerOfA4Y)}
+                className={`px-2 py-1 text-[11px] font-medium rounded-lg border transition ${
+                  Math.abs(originYMm - centerOfA4Y) < 1
+                    ? 'bg-blue-600 text-white border-blue-700 font-bold'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                A4 Center
+              </button>
+            </div>
           </div>
         </div>
       </div>

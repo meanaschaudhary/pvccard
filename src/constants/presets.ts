@@ -2,20 +2,20 @@ import { CardSizePreset, PaperDimensions, AlignmentSettings, CalibrationSettings
 
 export const CARD_SIZE_PRESETS: CardSizePreset[] = [
   {
-    id: 'pvc_default',
-    name: 'PVC ID Card (Canon Default)',
-    widthMm: 80.0,
-    heightMm: 50.0,
-    category: 'id_standard',
-    description: 'Exact 80 × 50 mm (8:5 ratio) standard used in PVC card cutter dies and Canon card trays.',
-  },
-  {
     id: 'cr80_standard',
-    name: 'Standard ID-1 / CR80',
+    name: 'Actual Standard PVC Card (CR80)',
     widthMm: 85.6,
     heightMm: 54.0,
     category: 'id_standard',
-    description: '85.6 × 54 mm international ISO/IEC 7810 format (Bank card, Driver license standard).',
+    description: '85.6 × 54.0 mm actual international ISO/IEC 7810 ID-1 standard for PVC ID, ATM, Smart & National Cards.',
+  },
+  {
+    id: 'pvc_die_cut',
+    name: 'Compact Die-Cut (80 × 50 mm)',
+    widthMm: 80.0,
+    heightMm: 50.0,
+    category: 'id_standard',
+    description: 'Compact 80 × 50 mm (8:5 ratio) format used in small card cutter dies.',
   },
   {
     id: 'aadhaar_cut',
@@ -123,13 +123,13 @@ export const DEFAULT_ALIGNMENT: AlignmentSettings = {
   paperSizeKey: 'a4',
   paperWidthMm: 210,
   paperHeightMm: 297,
-  cardWidthMm: 80.0,
-  cardHeightMm: 50.0,
+  cardWidthMm: 85.6,
+  cardHeightMm: 54.0,
   placementMode: 'top_center',
   centerOnPage: true,
   topMarginMm: 20.0,
-  originXMm: 65.0, // (210 - 80) / 2 = 65.0mm (Centered horizontally on A4)
-  originYMm: 20.0, // Top margin: 20.0mm from the top edge of A4
+  originXMm: 62.2, // (210 - 85.6) / 2 = 62.2mm (Centered horizontally on A4)
+  originYMm: 20.0, // Top margin: 20.0mm from the top edge of A4 (range on A4: 0 to 243mm)
   multiCardLayout: {
     enabled: false,
     rows: 1,
@@ -147,19 +147,19 @@ export const DEFAULT_ALIGNMENT: AlignmentSettings = {
 export const DEFAULT_PROFILES: PrinterProfile[] = [
   {
     id: 'canon_a4_top_center',
-    name: 'Canon A4 Sheet (Top & Center Aligned)',
-    description: 'Horizontally centered at the top of A4 (X: 65.0mm, Y: 20.0mm). Front and back print at the exact same top-center location.',
+    name: 'Canon A4 Sheet (Actual PVC CR-80 Top & Center)',
+    description: 'Actual standard PVC card (85.6 × 54.0 mm) centered horizontally on A4 (X: 62.2mm, Y: 20.0mm). Front and back print at the exact same location.',
     isDefault: true,
     alignment: {
       paperSizeKey: 'a4',
       paperWidthMm: 210,
       paperHeightMm: 297,
-      cardWidthMm: 80.0,
-      cardHeightMm: 50.0,
+      cardWidthMm: 85.6,
+      cardHeightMm: 54.0,
       placementMode: 'top_center',
       centerOnPage: true,
       topMarginMm: 20.0,
-      originXMm: 65.0,
+      originXMm: 62.2,
       originYMm: 20.0,
       multiCardLayout: {
         enabled: false,

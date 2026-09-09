@@ -44,20 +44,25 @@ export function calculateSlotCoordinates(
   const totalGridHeight = rows * cardHeightMm + (rows - 1) * gapY;
 
   // Placement mode calculation:
-  // 'top_center': Centered horizontally on the page, positioned at the TOP (originYMm / topMarginMm)
-  // 'page_center': Dead center of the entire sheet (both X and Y)
-  // 'custom': Freehand X and Y millimeters
-  let effectiveOriginX = originXMm;
-  let effectiveOriginY = originYMm;
+  // Default horizontal and vertical centers for the sheet
+  const defaultCenterX = Math.round(((paperWidthMm - totalGridWidth) / 2) * 10) / 10;
+  const defaultCenterY = Math.round(((paperHeightMm - totalGridHeight) / 2) * 10) / 10;
+
+  // Prioritize explicit originXMm so left/right adjustments apply directly on print
+  let effectiveOriginX = typeof originXMm === 'number' && !isNaN(originXMm)
+    ? originXMm
+    : defaultCenterX;
+
+  // Prioritize explicit originYMm so up/down adjustments apply directly on print
+  let effectiveOriginY = typeof originYMm === 'number' && !isNaN(originYMm)
+    ? originYMm
+    : (topMarginMm !== undefined ? topMarginMm : 20.0);
 
   const activeMode: PlacementMode = placementMode || (centerOnPage ? 'page_center' : 'custom');
 
-  if (activeMode === 'top_center') {
-    effectiveOriginX = Math.round(((paperWidthMm - totalGridWidth) / 2) * 10) / 10;
-    effectiveOriginY = topMarginMm !== undefined ? topMarginMm : originYMm;
-  } else if (activeMode === 'page_center') {
-    effectiveOriginX = Math.round(((paperWidthMm - totalGridWidth) / 2) * 10) / 10;
-    effectiveOriginY = Math.round(((paperHeightMm - totalGridHeight) / 2) * 10) / 10;
+  // If in pure page_center mode without custom Y override, center on sheet vertically
+  if (activeMode === 'page_center' && (typeof originYMm !== 'number' || isNaN(originYMm))) {
+    effectiveOriginY = defaultCenterY;
   }
 
   const scale = calibration.scaleCorrectionPct / 100.0;
