@@ -33,17 +33,39 @@ export interface CropState {
   aspectRatioLocked: boolean;
 }
 
+export interface PhotoRegion {
+  x: number; // percentage (0 - 100) from left edge of card
+  y: number; // percentage (0 - 100) from top edge of card
+  width: number; // percentage (0 - 100) of card width
+  height: number; // percentage (0 - 100) of card height
+}
+
+export interface PhotoEnhanceSettings {
+  enabled: boolean;
+  region: PhotoRegion;
+  brightness: number; // -100 to +100 (0 default)
+  contrast: number; // -100 to +100 (0 default)
+  highlights: number; // -100 to +100 (0 default)
+  shadows: number; // -100 to +100 (0 default)
+  sharpness: number; // 0 to 100 (0 default)
+  warmth: number; // -100 to +100 (0 default)
+  saturation: number; // -100 to +100 (0 default)
+  feather: number; // 0 to 20 px (default 8)
+}
+
 export interface CardSideData {
   originalFile: File | null;
   fileName: string | null;
   fileType: 'image' | 'pdf' | null;
   pdfNumPages?: number;
   selectedPdfPage?: number;
+  pdfPassword?: string;
   sourceImageUrl: string | null; // high-res base64 or blob URL
   croppedImageUrl: string | null; // high-res rendered crop
   crop: CropState;
   brightness: number; // 100 default
   contrast: number; // 100 default
+  photoEnhance?: PhotoEnhanceSettings; // Specific face / profile photo clarify
 }
 
 export interface CardSlot {

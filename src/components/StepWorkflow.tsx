@@ -18,10 +18,15 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Lock,
+  Unlock,
+  Copy,
+  X,
 } from 'lucide-react';
 import { CardSideData, AlignmentSettings, CalibrationSettings, WorkflowStep } from '../types';
-import { loadPdfDocument, renderPdfPageToDataUrl } from '../utils/pdfHelper';
+import { loadPdfDocument, renderPdfPageToDataUrl, isPdfPasswordError } from '../utils/pdfHelper';
 import { renderHighResCardImage } from '../utils/imageProcessing';
+import { PdfPasswordModal } from './PdfPasswordModal';
 
 interface StepWorkflowProps {
   workflowStep: WorkflowStep;
@@ -35,7 +40,7 @@ interface StepWorkflowProps {
   onPrintFront: () => void;
   onOpenReinsertionModal: () => void;
   onDirectPrintBack: () => void;
-  onGoToEditor: (side: 'front' | 'back') => void;
+  onGoToEditor: (side: 'front' | 'back', tab?: 'crop' | 'photo_enhance') => void;
   onResetWorkflow: () => void;
   onLoadSpecimenCards: () => void;
   onUpdateAlignment?: (updated: Partial<AlignmentSettings>) => void;
@@ -61,19 +66,43 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
   const frontInputRef = useRef<HTMLInputElement>(null);
   const backInputRef = useRef<HTMLInputElement>(null);
   const [isProcessingFile, setIsProcessingFile] = useState<string | null>(null);
+  const [dragOverSide, setDragOverSide] = useState<'front' | 'back' | null>(null);
 
   // Safety confirmation check
   const [reinsertConfirmed, setReinsertConfirmed] = useState(false);
 
+  // Password-protected PDF Modal State
+  const [pdfPasswordModal, setPdfPasswordModal] = useState<{
+    isOpen: boolean;
+    file: File | null;
+    side: 'front' | 'back';
+    isIncorrect: boolean;
+    errorMessage?: string;
+    isProcessing: boolean;
+  }>({
+    isOpen: false,
+    file: null,
+    side: 'front',
+    isIncorrect: false,
+    isProcessing: false,
+  });
+
+  // Multi-page PDF offer banner (e.g. e-Aadhaar 2 pages)
+  const [multiPageOffer, setMultiPageOffer] = useState<{
+    file: File;
+    numPages: number;
+    password?: string;
+  } | null>(null);
+
   const { cardWidthMm, cardHeightMm, originXMm, originYMm, paperWidthMm, paperHeightMm } = alignment;
 
-  const handleFileUpload = async (file: File, side: 'front' | 'back') => {
+  const handleFileUpload = async (file: File, side: 'front' | 'back', password?: string) => {
     setIsProcessingFile(side);
     const updateFn = side === 'front' ? onUpdateFrontData : onUpdateBackData;
 
     try {
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-        const { numPages, pdfDoc } = await loadPdfDocument(file);
+        const { numPages, pdfDoc } = await loadPdfDocument(file, password);
         // Render first page at high-res 3.5 scale (~350 DPI)
         const rendered = await renderPdfPageToDataUrl(pdfDoc, 1, 3.5);
 
@@ -99,9 +128,22 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
           fileType: 'pdf',
           pdfNumPages: numPages,
           selectedPdfPage: 1,
+          pdfPassword: password,
           sourceImageUrl: rendered.dataUrl,
           croppedImageUrl: highRes,
         });
+
+        // Successfully unlocked & loaded, close password modal
+        setPdfPasswordModal((prev) => ({ ...prev, isOpen: false, isProcessing: false }));
+
+        // If multi-page PDF loaded for Front, offer to automatically set Page 2 for Back
+        if (side === 'front' && numPages >= 2) {
+          setMultiPageOffer({
+            file,
+            numPages,
+            password,
+          });
+        }
       } else {
         // Standard Image (JPG, PNG)
         const reader = new FileReader();
@@ -132,10 +174,98 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
         };
         reader.readAsDataURL(file);
       }
-    } catch (err) {
-      console.error(`Failed to load ${side} file`, err);
+    } catch (err: unknown) {
+      const pwCheck = isPdfPasswordError(err);
+      if (pwCheck.isPasswordProtected) {
+        // Open PDF Password Modal with accurate status
+        setPdfPasswordModal({
+          isOpen: true,
+          file,
+          side,
+          isIncorrect: pwCheck.isIncorrect || Boolean(password),
+          errorMessage:
+            pwCheck.isIncorrect || Boolean(password)
+              ? 'Incorrect password. Please verify spelling, Caps Lock, or birth year and try again.'
+              : undefined,
+          isProcessing: false,
+        });
+      } else {
+        console.error(`Failed to load ${side} file`, err);
+      }
     } finally {
       setIsProcessingFile(null);
+    }
+  };
+
+  const handleUnlockPassword = async (enteredPassword: string) => {
+    if (!pdfPasswordModal.file) return;
+    setPdfPasswordModal((prev) => ({
+      ...prev,
+      isProcessing: true,
+      isIncorrect: false,
+      errorMessage: undefined,
+    }));
+    await handleFileUpload(pdfPasswordModal.file, pdfPasswordModal.side, enteredPassword);
+  };
+
+  const handleApplyPageTwoToBack = async () => {
+    if (!multiPageOffer) return;
+    setIsProcessingFile('back');
+    try {
+      const { pdfDoc } = await loadPdfDocument(multiPageOffer.file, multiPageOffer.password);
+      const rendered = await renderPdfPageToDataUrl(pdfDoc, 2, 3.5);
+      const highRes = await renderHighResCardImage(
+        rendered.dataUrl,
+        {
+          x: 0,
+          y: 0,
+          zoom: 1,
+          rotation: 0,
+          flipH: false,
+          flipV: false,
+          aspectRatioLocked: true,
+        },
+        cardWidthMm,
+        cardHeightMm
+      );
+
+      onUpdateBackData({
+        originalFile: multiPageOffer.file,
+        fileName: `${multiPageOffer.file.name} (Page 2)`,
+        fileType: 'pdf',
+        pdfNumPages: multiPageOffer.numPages,
+        selectedPdfPage: 2,
+        pdfPassword: multiPageOffer.password,
+        sourceImageUrl: rendered.dataUrl,
+        croppedImageUrl: highRes,
+      });
+      setMultiPageOffer(null);
+    } catch (err) {
+      console.error('Failed to extract page 2 for back side', err);
+    } finally {
+      setIsProcessingFile(null);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent, side: 'front' | 'back') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverSide(side);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverSide(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, side: 'front' | 'back') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverSide(null);
+    const droppedFile = e.dataTransfer?.files?.[0];
+    if (droppedFile) {
+      handleFileUpload(droppedFile, side);
     }
   };
 
@@ -509,6 +639,56 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
         </div>
       </div>
 
+      {/* Multi-Page PDF Auto-Offer Banner */}
+      {multiPageOffer && (
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-amber-50 border border-blue-200 p-4 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs shadow-sm animate-fade-in">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <FileText className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className="font-black text-blue-950 text-sm">
+                  Multi-Page PDF Detected ({multiPageOffer.numPages} Pages)
+                </p>
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-bold flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>Front (Page 1) Loaded</span>
+                </span>
+                {multiPageOffer.password && (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold flex items-center gap-1">
+                    <Unlock className="w-3 h-3 text-amber-700" />
+                    <span>Unlocked</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-slate-600 text-xs mt-0.5 leading-relaxed">
+                Page 1 is set for the Front card. Would you like to automatically load <strong>Page 2 onto the Back Card</strong> without re-uploading or typing the password again?
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <button
+              type="button"
+              onClick={handleApplyPageTwoToBack}
+              disabled={isProcessingFile === 'back'}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition cursor-pointer"
+            >
+              <Copy className="w-4 h-4" />
+              <span>Use Page 2 for Back Card</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMultiPageOffer(null)}
+              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-200/50 transition cursor-pointer"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Two Column Step Cards (Front on Left, Back on Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ================= STEP 1: FRONT CARD ================= */}
@@ -559,7 +739,23 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
             />
 
             {/* Front Card Preview Container (Exact 8:5 ratio preview) */}
-            <div className="relative group bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center min-h-[220px] select-none">
+            <div
+              onDragOver={(e) => handleDragOver(e, 'front')}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, 'front')}
+              className={`relative group bg-slate-950 rounded-xl overflow-hidden border flex items-center justify-center min-h-[220px] select-none transition ${
+                dragOverSide === 'front'
+                  ? 'border-2 border-dashed border-amber-400 bg-amber-950/40 ring-4 ring-amber-400/20'
+                  : 'border-slate-800'
+              }`}
+            >
+              {dragOverSide === 'front' && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-xs text-amber-400 pointer-events-none">
+                  <Upload className="w-10 h-10 animate-bounce mb-2" />
+                  <p className="font-bold text-sm">Drop PDF or Image here</p>
+                  <p className="text-[11px] text-amber-300/80">Will auto-detect passwords &amp; pages</p>
+                </div>
+              )}
               {frontHasImage ? (
                 <>
                   <img
@@ -570,19 +766,38 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
                   {/* Floating Action Bar */}
                   <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition">
                     <button
-                      onClick={() => onGoToEditor('front')}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-slate-900/80 backdrop-blur text-white text-xs font-semibold rounded-md border border-slate-700 hover:bg-slate-800"
+                      type="button"
+                      onClick={() => onGoToEditor('front', 'photo_enhance')}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-500 backdrop-blur text-white text-xs font-bold rounded-md border border-amber-400/50 shadow-sm transition"
+                      title="Adjust Brightness, Contrast, Highlights, Shadows & Sharpness on Profile Photo"
                     >
-                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Crop / Adjust</span>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                      <span>✨ Clear Photo</span>
                     </button>
                     <button
+                      type="button"
+                      onClick={() => onGoToEditor('front', 'crop')}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-slate-900/80 backdrop-blur text-white text-xs font-semibold rounded-md border border-slate-700 hover:bg-slate-800 transition"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Crop</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => frontInputRef.current?.click()}
-                      className="px-2.5 py-1 bg-slate-900/80 backdrop-blur text-slate-300 text-xs font-semibold rounded-md border border-slate-700 hover:text-white"
+                      className="px-2.5 py-1 bg-slate-900/80 backdrop-blur text-slate-300 text-xs font-semibold rounded-md border border-slate-700 hover:text-white transition"
                     >
                       Replace
                     </button>
                   </div>
+
+                  {/* Photo Enhanced Badge Indicator */}
+                  {frontData.photoEnhance?.enabled && (
+                    <div className="absolute bottom-2 left-2 bg-amber-500/90 backdrop-blur text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
+                      <Sparkles className="w-3 h-3" />
+                      <span>Photo Clarified</span>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div
@@ -598,7 +813,7 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
                       e.stopPropagation();
                       onLoadSpecimenCards();
                     }}
-                    className="mt-3 flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 font-semibold underline"
+                    className="mt-3 flex items-center gap-1 text-[11px] text-amber-400 hover:text-amber-300 font-semibold underline cursor-pointer"
                   >
                     <Sparkles className="w-3 h-3" />
                     <span>Or load specimen test cards</span>
@@ -614,11 +829,24 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
 
             {/* File info badge */}
             {frontData.fileName && (
-              <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
-                <span className="truncate max-w-[240px] font-medium">{frontData.fileName}</span>
-                <span className="text-[10px] uppercase font-mono text-slate-500">
-                  {frontData.fileType} (High-Res Ready)
-                </span>
+              <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span className="truncate max-w-[200px] font-medium text-slate-900" title={frontData.fileName}>
+                    {frontData.fileName}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {frontData.pdfPassword && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md">
+                      <Unlock className="w-3 h-3 text-amber-700" />
+                      <span>Unlocked</span>
+                    </span>
+                  )}
+                  <span className="text-[10px] uppercase font-mono text-slate-500 bg-slate-200/70 px-1.5 py-0.5 rounded">
+                    {frontData.fileType}
+                  </span>
+                </div>
               </div>
             )}
           </div>
@@ -760,7 +988,23 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
             )}
 
             {/* Back Card Preview Container */}
-            <div className="relative group bg-slate-950 rounded-xl overflow-hidden border border-slate-800 flex items-center justify-center min-h-[220px] select-none">
+            <div
+              onDragOver={(e) => handleDragOver(e, 'back')}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, 'back')}
+              className={`relative group bg-slate-950 rounded-xl overflow-hidden border flex items-center justify-center min-h-[220px] select-none transition ${
+                dragOverSide === 'back'
+                  ? 'border-2 border-dashed border-indigo-400 bg-indigo-950/40 ring-4 ring-indigo-400/20'
+                  : 'border-slate-800'
+              }`}
+            >
+              {dragOverSide === 'back' && (
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/85 backdrop-blur-xs text-indigo-300 pointer-events-none">
+                  <Upload className="w-10 h-10 animate-bounce mb-2" />
+                  <p className="font-bold text-sm">Drop PDF or Image here</p>
+                  <p className="text-[11px] text-indigo-300/80">Will auto-detect passwords &amp; pages</p>
+                </div>
+              )}
               {backHasImage ? (
                 <>
                   <img
@@ -770,19 +1014,38 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
                   />
                   <div className="absolute top-2 right-2 flex items-center gap-1.5 opacity-90 group-hover:opacity-100 transition">
                     <button
-                      onClick={() => onGoToEditor('back')}
-                      className="flex items-center gap-1 px-2.5 py-1 bg-slate-900/80 backdrop-blur text-white text-xs font-semibold rounded-md border border-slate-700 hover:bg-slate-800"
+                      type="button"
+                      onClick={() => onGoToEditor('back', 'photo_enhance')}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-amber-600 hover:bg-amber-500 backdrop-blur text-white text-xs font-bold rounded-md border border-amber-400/50 shadow-sm transition"
+                      title="Adjust Brightness, Contrast, Highlights, Shadows & Sharpness on Profile Photo"
                     >
-                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Crop / Adjust</span>
+                      <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                      <span>✨ Clear Photo</span>
                     </button>
                     <button
+                      type="button"
+                      onClick={() => onGoToEditor('back', 'crop')}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-slate-900/80 backdrop-blur text-white text-xs font-semibold rounded-md border border-slate-700 hover:bg-slate-800 transition"
+                    >
+                      <Sliders className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Crop</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => backInputRef.current?.click()}
-                      className="px-2.5 py-1 bg-slate-900/80 backdrop-blur text-slate-300 text-xs font-semibold rounded-md border border-slate-700 hover:text-white"
+                      className="px-2.5 py-1 bg-slate-900/80 backdrop-blur text-slate-300 text-xs font-semibold rounded-md border border-slate-700 hover:text-white transition"
                     >
                       Replace
                     </button>
                   </div>
+
+                  {/* Photo Enhanced Badge Indicator */}
+                  {backData.photoEnhance?.enabled && (
+                    <div className="absolute bottom-2 left-2 bg-amber-500/90 backdrop-blur text-slate-950 font-bold text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
+                      <Sparkles className="w-3 h-3" />
+                      <span>Photo Clarified</span>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div
@@ -799,6 +1062,29 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
                 Matched Master Box: {cardWidthMm} × {cardHeightMm} mm
               </div>
             </div>
+
+            {/* Back File info badge */}
+            {backData.fileName && (
+              <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200 gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span className="truncate max-w-[200px] font-medium text-slate-900" title={backData.fileName}>
+                    {backData.fileName}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {backData.pdfPassword && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-md">
+                      <Unlock className="w-3 h-3 text-amber-700" />
+                      <span>Unlocked</span>
+                    </span>
+                  )}
+                  <span className="text-[10px] uppercase font-mono text-slate-500 bg-slate-200/70 px-1.5 py-0.5 rounded">
+                    {backData.fileType}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Safety Confirmation Checkbox */}
             <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
@@ -891,6 +1177,26 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Password-Protected PDF Unlock Modal */}
+      <PdfPasswordModal
+        isOpen={pdfPasswordModal.isOpen}
+        fileName={pdfPasswordModal.file?.name || ''}
+        fileSize={pdfPasswordModal.file?.size}
+        side={pdfPasswordModal.side}
+        isIncorrect={pdfPasswordModal.isIncorrect}
+        errorMessage={pdfPasswordModal.errorMessage}
+        isProcessing={pdfPasswordModal.isProcessing}
+        onUnlock={handleUnlockPassword}
+        onCancel={() =>
+          setPdfPasswordModal((prev) => ({
+            ...prev,
+            isOpen: false,
+            isProcessing: false,
+            isIncorrect: false,
+          }))
+        }
+      />
     </div>
   );
 };

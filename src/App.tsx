@@ -38,6 +38,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('workflow');
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('front');
   const [editorSide, setEditorSide] = useState<'front' | 'back'>('front');
+  const [editorInitialTab, setEditorInitialTab] = useState<'crop' | 'photo_enhance'>('crop');
 
   // Profiles & Settings
   const [profiles, setProfiles] = useState<PrinterProfile[]>(loadSavedProfiles);
@@ -206,8 +207,9 @@ export default function App() {
               onPrintFront={handlePrintFront}
               onOpenReinsertionModal={() => setIsReinsertionModalOpen(true)}
               onDirectPrintBack={handlePrintBack}
-              onGoToEditor={(side) => {
+              onGoToEditor={(side, tab) => {
                 setEditorSide(side);
+                setEditorInitialTab(tab || 'crop');
                 setActiveTab('editor');
               }}
               onResetWorkflow={handleResetWorkflow}
@@ -233,10 +235,12 @@ export default function App() {
         {activeTab === 'editor' && (
           <div className="space-y-6">
             <CardEditor
+              key={`${editorSide}_${editorInitialTab}`}
               side={editorSide}
               cardData={editorSide === 'front' ? frontData : backData}
               cardWidthMm={alignment.cardWidthMm}
               cardHeightMm={alignment.cardHeightMm}
+              initialTab={editorInitialTab}
               onUpdateCardData={(updated) => {
                 if (editorSide === 'front') {
                   setFrontData((prev) => ({ ...prev, ...updated }));

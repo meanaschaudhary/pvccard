@@ -17,16 +17,21 @@ import {
   Upload,
   Layers,
   Sparkles,
+  Sliders,
+  Crop,
 } from 'lucide-react';
-import { CardSideData, CropState } from '../types';
-import { renderHighResCardImage } from '../utils/imageProcessing';
+import { CardSideData, CropState, PhotoEnhanceSettings } from '../types';
+import { renderHighResCardImage, createDefaultPhotoEnhance } from '../utils/imageProcessing';
 import { loadPdfDocument, renderPdfPageToDataUrl } from '../utils/pdfHelper';
+import { PhotoEnhanceOverlay } from './PhotoEnhanceOverlay';
+import { PhotoEnhancerPanel } from './PhotoEnhancerPanel';
 
 interface CardEditorProps {
   side: 'front' | 'back';
   cardData: CardSideData;
   cardWidthMm: number;
   cardHeightMm: number;
+  initialTab?: 'crop' | 'photo_enhance';
   onUpdateCardData: (updated: Partial<CardSideData>) => void;
   onApplyCrop: (highResDataUrl: string) => void;
   onSwitchSide?: (side: 'front' | 'back') => void;
@@ -37,11 +42,16 @@ export const CardEditor: React.FC<CardEditorProps> = ({
   cardData,
   cardWidthMm,
   cardHeightMm,
+  initialTab = 'crop',
   onUpdateCardData,
   onApplyCrop,
   onSwitchSide,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [editorMode, setEditorMode] = useState<'crop' | 'photo_enhance'>(initialTab);
+  const [isComparing, setIsComparing] = useState(false);
+  const [containerDimensions, setContainerDimensions] = useState({ width: 540, height: 337 });
+
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isProcessing, setIsProcessing] = useState(false);
@@ -49,8 +59,26 @@ export const CardEditor: React.FC<CardEditorProps> = ({
   const [pdfLoading, setPdfLoading] = useState(false);
 
   const { crop, brightness, contrast, sourceImageUrl, fileName, fileType, pdfNumPages, selectedPdfPage } = cardData;
+  const photoEnhance = cardData.photoEnhance || createDefaultPhotoEnhance();
 
   const targetAspect = cardWidthMm / cardHeightMm;
+
+  // Measure container dimensions for pixel-accurate photo overlay
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateDims = () => {
+      if (containerRef.current) {
+        setContainerDimensions({
+          width: containerRef.current.clientWidth,
+          height: containerRef.current.clientHeight,
+        });
+      }
+    };
+    updateDims();
+    const observer = new ResizeObserver(updateDims);
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [sourceImageUrl]);
 
   // Handle PDF page change if document is PDF
   const handlePdfPageChange = async (newPage: number) => {
@@ -59,7 +87,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
       setPdfLoading(true);
       let doc = pdfDoc;
       if (!doc) {
-        const info = await loadPdfDocument(cardData.originalFile);
+        const info = await loadPdfDocument(cardData.originalFile, cardData.pdfPassword);
         doc = info.pdfDoc;
         setPdfDoc(doc);
       }
@@ -105,7 +133,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
 
   // Zoom wheel
   const handleWheel = (e: React.WheelEvent) => {
-    if (!sourceImageUrl) return;
+    if (!sourceImageUrl || editorMode === 'photo_enhance') return;
     e.preventDefault();
     const zoomDelta = e.deltaY < 0 ? 0.08 : -0.08;
     const newZoom = Math.min(5, Math.max(0.2, crop.zoom + zoomDelta));
@@ -166,6 +194,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
       },
       brightness: 100,
       contrast: 100,
+      photoEnhance: createDefaultPhotoEnhance(),
     });
   };
 
@@ -179,7 +208,8 @@ export const CardEditor: React.FC<CardEditorProps> = ({
         cardWidthMm,
         cardHeightMm,
         brightness,
-        contrast
+        contrast,
+        photoEnhance
       );
       onApplyCrop(highRes);
     } catch (err) {
@@ -193,7 +223,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       {/* Top Header Bar */}
       <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2.5">
           {onSwitchSide && (
             <div className="inline-flex rounded-lg bg-slate-200 p-0.5 text-xs font-semibold">
               <button
@@ -217,17 +247,52 @@ export const CardEditor: React.FC<CardEditorProps> = ({
             </div>
           )}
 
+          {/* Editor Mode Switcher (Framing vs Photo Clarifier) */}
+          <div className="inline-flex rounded-lg bg-slate-200 p-0.5 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => setEditorMode('crop')}
+              className={`px-3 py-1 rounded-md transition flex items-center gap-1.5 ${
+                editorMode === 'crop'
+                  ? 'bg-white text-slate-900 shadow-sm font-bold'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Crop className="w-3.5 h-3.5 text-slate-500" />
+              <span>Card Framing &amp; Crop</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditorMode('photo_enhance');
+                if (!photoEnhance.enabled) {
+                  onUpdateCardData({
+                    photoEnhance: {
+                      ...photoEnhance,
+                      enabled: true,
+                    },
+                  });
+                }
+              }}
+              className={`px-3 py-1 rounded-md transition flex items-center gap-1.5 ${
+                editorMode === 'photo_enhance'
+                  ? 'bg-amber-500 text-slate-950 font-bold shadow-sm'
+                  : 'text-amber-900 hover:text-amber-950'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-700" />
+              <span>✨ Clear Profile Photo Only</span>
+            </button>
+          </div>
+
           <div>
-            <h2 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-              <span>{side === 'front' ? 'Front Side Editor' : 'Back Side Editor'}</span>
-              <span className="text-xs font-mono font-normal text-slate-500">
-                ({cardWidthMm} × {cardHeightMm} mm • {targetAspect.toFixed(2)}:1)
-              </span>
-            </h2>
+            <span className="text-xs font-mono text-slate-500 hidden sm:inline">
+              ({cardWidthMm} × {cardHeightMm} mm • {targetAspect.toFixed(2)}:1)
+            </span>
           </div>
         </div>
 
-        {/* Action button */}
+        {/* Action buttons */}
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -235,7 +300,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
             className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-200/60 rounded-md transition"
           >
             <RefreshCcw className="w-3.5 h-3.5" />
-            <span>Reset</span>
+            <span>Reset All</span>
           </button>
           <button
             type="button"
@@ -244,7 +309,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-amber-600 hover:bg-amber-500 disabled:bg-slate-300 rounded-md shadow-sm transition"
           >
             <Check className="w-4 h-4" />
-            <span>{isProcessing ? 'Processing High-Res...' : 'Apply & Save Crop'}</span>
+            <span>{isProcessing ? 'Processing High-Res...' : 'Apply & Save'}</span>
           </button>
         </div>
       </div>
@@ -282,7 +347,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
 
       {/* Main Canvas & Crop Viewport */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-0">
-        <div className="lg:col-span-3 bg-slate-900 p-6 flex flex-col items-center justify-center min-h-[420px] relative overflow-hidden select-none">
+        <div className="lg:col-span-3 bg-slate-900 p-6 flex flex-col items-center justify-center min-h-[440px] relative overflow-hidden select-none">
           {sourceImageUrl ? (
             <div
               ref={containerRef}
@@ -291,10 +356,11 @@ export const CardEditor: React.FC<CardEditorProps> = ({
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
               onWheel={handleWheel}
-              className="relative cursor-grab active:cursor-grabbing border-2 border-amber-400/80 rounded-lg shadow-2xl overflow-hidden bg-slate-950 flex items-center justify-center transition-all"
+              className={`relative rounded-lg shadow-2xl overflow-hidden bg-slate-950 flex items-center justify-center transition-all ${
+                editorMode === 'crop' ? 'cursor-grab active:cursor-grabbing border-2 border-amber-400/80' : 'border-2 border-slate-700'
+              }`}
               style={{
-                // Responsive card preview based on aspect ratio
-                width: 'min(90%, 540px)',
+                width: 'min(92%, 560px)',
                 aspectRatio: `${targetAspect}`,
                 boxShadow: '0 0 0 9999px rgba(15, 23, 42, 0.75)',
               }}
@@ -316,32 +382,48 @@ export const CardEditor: React.FC<CardEditorProps> = ({
                 />
               </div>
 
-              {/* Exact Physical Bounding Box Overlay & Crosshairs */}
-              <div className="absolute inset-0 pointer-events-none border border-dashed border-amber-300/60 rounded-lg">
-                {/* 3x3 Grid Guidelines for Alignment */}
-                <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 opacity-30">
-                  <div className="border-r border-b border-amber-300" />
-                  <div className="border-r border-b border-amber-300" />
-                  <div className="border-b border-amber-300" />
-                  <div className="border-r border-b border-amber-300" />
-                  <div className="border-r border-b border-amber-300" />
-                  <div className="border-b border-amber-300" />
-                  <div className="border-r border-amber-300" />
-                  <div className="border-r border-amber-300" />
-                  <div />
-                </div>
+              {/* Profile Photo Enhancement Overlay & Bounding Box */}
+              <PhotoEnhanceOverlay
+                photoEnhance={photoEnhance}
+                onChange={(updated) => onUpdateCardData({ photoEnhance: updated })}
+                sourceImageUrl={sourceImageUrl}
+                crop={crop}
+                globalBrightness={brightness}
+                globalContrast={contrast}
+                containerWidth={containerDimensions.width}
+                containerHeight={containerDimensions.height}
+                isComparing={isComparing}
+                isActive={editorMode === 'photo_enhance'}
+              />
 
-                {/* Center Crosshair */}
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center">
-                  <div className="w-full h-0.5 bg-amber-400/70" />
-                  <div className="h-full w-0.5 bg-amber-400/70 absolute" />
-                </div>
+              {/* Exact Physical Bounding Box Overlay & Crosshairs (in Crop mode) */}
+              {editorMode === 'crop' && (
+                <div className="absolute inset-0 pointer-events-none border border-dashed border-amber-300/60 rounded-lg">
+                  {/* 3x3 Grid Guidelines for Alignment */}
+                  <div className="absolute inset-0 grid grid-cols-3 grid-rows-3 opacity-30">
+                    <div className="border-r border-b border-amber-300" />
+                    <div className="border-r border-b border-amber-300" />
+                    <div className="border-b border-amber-300" />
+                    <div className="border-r border-b border-amber-300" />
+                    <div className="border-r border-b border-amber-300" />
+                    <div className="border-b border-amber-300" />
+                    <div className="border-r border-amber-300" />
+                    <div className="border-r border-amber-300" />
+                    <div />
+                  </div>
 
-                {/* Physical Dimensions Pill */}
-                <div className="absolute bottom-2 right-2 bg-slate-950/80 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-amber-300 border border-amber-500/30">
-                  Exact Physical Box: {cardWidthMm} × {cardHeightMm} mm
+                  {/* Center Crosshair */}
+                  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center">
+                    <div className="w-full h-0.5 bg-amber-400/70" />
+                    <div className="h-full w-0.5 bg-amber-400/70 absolute" />
+                  </div>
+
+                  {/* Physical Dimensions Pill */}
+                  <div className="absolute bottom-2 right-2 bg-slate-950/80 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-amber-300 border border-amber-500/30">
+                    Master Box: {cardWidthMm} × {cardHeightMm} mm
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ) : (
             <div className="text-center text-slate-400 py-12 px-6">
@@ -353,158 +435,210 @@ export const CardEditor: React.FC<CardEditorProps> = ({
             </div>
           )}
 
-          {/* Bottom quick navigation hint */}
+          {/* Bottom navigation hint */}
           <div className="absolute bottom-2 left-4 text-[11px] text-slate-400 flex items-center gap-3">
-            <span>🖱️ Drag to pan</span>
-            <span>⚲ Scroll to zoom</span>
-            <span>⤾ Rotate below</span>
+            {editorMode === 'crop' ? (
+              <>
+                <span>🖱️ Drag to pan</span>
+                <span>⚲ Scroll to zoom</span>
+                <span>⤾ Rotate in sidebar</span>
+              </>
+            ) : (
+              <>
+                <span className="text-amber-400 font-semibold">✨ Photo Clarifier Active</span>
+                <span>🖱️ Drag box to place face</span>
+                <span>↘ Drag corner to resize</span>
+              </>
+            )}
           </div>
         </div>
 
         {/* Sidebar Controls */}
-        <div className="lg:col-span-1 p-4 bg-slate-50/80 border-l border-slate-200 flex flex-col justify-between space-y-4 text-xs">
-          <div className="space-y-4">
-            {/* Zoom Slider */}
-            <div>
-              <div className="flex justify-between items-center mb-1 text-slate-700 font-semibold">
-                <span className="flex items-center gap-1">
-                  <ZoomIn className="w-3.5 h-3.5 text-slate-500" /> Zoom Level
-                </span>
-                <span className="font-mono text-[11px] text-slate-600">
-                  {(crop.zoom * 100).toFixed(0)}%
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleZoomChange(Math.max(0.2, crop.zoom - 0.1))}
-                  className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-100"
-                >
-                  <ZoomOut className="w-3.5 h-3.5 text-slate-600" />
-                </button>
-                <input
-                  type="range"
-                  min="0.2"
-                  max="3"
-                  step="0.05"
-                  value={crop.zoom}
-                  onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
-                  className="flex-1 accent-amber-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleZoomChange(Math.min(3, crop.zoom + 0.1))}
-                  className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-100"
-                >
-                  <ZoomIn className="w-3.5 h-3.5 text-slate-600" />
-                </button>
-              </div>
-            </div>
-
-            {/* Rotation & Flips */}
-            <div>
-              <span className="block mb-1.5 font-semibold text-slate-700">Orientation &amp; Flips</span>
-              <div className="grid grid-cols-3 gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleRotate}
-                  className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white border border-slate-200 rounded hover:bg-slate-100 font-medium text-slate-700 transition"
-                  title="Rotate 90 degrees"
-                >
-                  <RotateCw className="w-3.5 h-3.5" />
-                  <span>+90°</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleFlipH}
-                  className={`flex items-center justify-center gap-1 py-1.5 px-2 border rounded font-medium transition ${
-                    crop.flipH
-                      ? 'bg-amber-100 border-amber-300 text-amber-900'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                  title="Flip Horizontally"
-                >
-                  <FlipHorizontal className="w-3.5 h-3.5" />
-                  <span>Flip H</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleFlipV}
-                  className={`flex items-center justify-center gap-1 py-1.5 px-2 border rounded font-medium transition ${
-                    crop.flipV
-                      ? 'bg-amber-100 border-amber-300 text-amber-900'
-                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
-                  }`}
-                  title="Flip Vertically"
-                >
-                  <FlipVertical className="w-3.5 h-3.5" />
-                  <span>Flip V</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Image Enhancements (Brightness / Contrast for Scanned ID cards) */}
-            <div className="space-y-2 pt-2 border-t border-slate-200">
-              <span className="block font-semibold text-slate-700">Scan Clarity Tuning</span>
+        <div className="lg:col-span-1 p-4 bg-slate-50/80 border-l border-slate-200 flex flex-col justify-between space-y-4 text-xs overflow-y-auto max-h-[640px]">
+          {editorMode === 'photo_enhance' ? (
+            /* Dedicated Profile Photo Enhancer Panel */
+            <PhotoEnhancerPanel
+              photoEnhance={photoEnhance}
+              onChange={(updated) => onUpdateCardData({ photoEnhance: updated })}
+              isComparing={isComparing}
+              setIsComparing={setIsComparing}
+            />
+          ) : (
+            /* Standard Card Framing & Cropping Controls */
+            <div className="space-y-4">
+              {/* Zoom Slider */}
               <div>
-                <div className="flex justify-between items-center text-[11px] text-slate-600 mb-0.5">
+                <div className="flex justify-between items-center mb-1 text-slate-700 font-semibold">
                   <span className="flex items-center gap-1">
-                    <Sun className="w-3 h-3 text-amber-500" /> Brightness
+                    <ZoomIn className="w-3.5 h-3.5 text-slate-500" /> Card Zoom Level
                   </span>
-                  <span className="font-mono">{brightness}%</span>
+                  <span className="font-mono text-[11px] text-slate-600">
+                    {(crop.zoom * 100).toFixed(0)}%
+                  </span>
                 </div>
-                <input
-                  type="range"
-                  min="60"
-                  max="140"
-                  step="5"
-                  value={brightness}
-                  onChange={(e) => onUpdateCardData({ brightness: parseInt(e.target.value) })}
-                  className="w-full accent-amber-600 h-1.5 bg-slate-200 rounded cursor-pointer"
-                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleZoomChange(Math.max(0.2, crop.zoom - 0.1))}
+                    className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-100"
+                  >
+                    <ZoomOut className="w-3.5 h-3.5 text-slate-600" />
+                  </button>
+                  <input
+                    type="range"
+                    min="0.2"
+                    max="3"
+                    step="0.05"
+                    value={crop.zoom}
+                    onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
+                    className="flex-1 accent-amber-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleZoomChange(Math.min(3, crop.zoom + 0.1))}
+                    className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-100"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5 text-slate-600" />
+                  </button>
+                </div>
               </div>
 
+              {/* Rotation & Flips */}
               <div>
-                <div className="flex justify-between items-center text-[11px] text-slate-600 mb-0.5">
-                  <span className="flex items-center gap-1">
-                    <Contrast className="w-3 h-3 text-indigo-500" /> Contrast
-                  </span>
-                  <span className="font-mono">{contrast}%</span>
+                <span className="block mb-1.5 font-semibold text-slate-700">Orientation &amp; Flips</span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handleRotate}
+                    className="flex items-center justify-center gap-1 py-1.5 px-2 bg-white border border-slate-200 rounded hover:bg-slate-100 font-medium text-slate-700 transition"
+                    title="Rotate 90 degrees"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                    <span>+90°</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFlipH}
+                    className={`flex items-center justify-center gap-1 py-1.5 px-2 border rounded font-medium transition ${
+                      crop.flipH
+                        ? 'bg-amber-100 border-amber-300 text-amber-900'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                    title="Flip Horizontally"
+                  >
+                    <FlipHorizontal className="w-3.5 h-3.5" />
+                    <span>Flip H</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleFlipV}
+                    className={`flex items-center justify-center gap-1 py-1.5 px-2 border rounded font-medium transition ${
+                      crop.flipV
+                        ? 'bg-amber-100 border-amber-300 text-amber-900'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                    title="Flip Vertically"
+                  >
+                    <FlipVertical className="w-3.5 h-3.5" />
+                    <span>Flip V</span>
+                  </button>
                 </div>
-                <input
-                  type="range"
-                  min="60"
-                  max="140"
-                  step="5"
-                  value={contrast}
-                  onChange={(e) => onUpdateCardData({ contrast: parseInt(e.target.value) })}
-                  className="w-full accent-amber-600 h-1.5 bg-slate-200 rounded cursor-pointer"
-                />
               </div>
-            </div>
 
-            {/* File Info */}
-            {fileName && (
-              <div className="p-2 rounded bg-slate-100 border border-slate-200 text-[11px] text-slate-600">
-                <span className="font-semibold text-slate-700 block truncate" title={fileName}>
-                  Source: {fileName}
-                </span>
-                <span className="text-[10px] text-slate-500">
-                  Preserving maximum original pixel quality (lossless extraction)
-                </span>
+              {/* Global Image Tuning (Brightness / Contrast for entire card) */}
+              <div className="space-y-2 pt-2 border-t border-slate-200">
+                <span className="block font-semibold text-slate-700">Whole Card Scan Tuning</span>
+                <div>
+                  <div className="flex justify-between items-center text-[11px] text-slate-600 mb-0.5">
+                    <span className="flex items-center gap-1">
+                      <Sun className="w-3 h-3 text-amber-500" /> Whole Card Brightness
+                    </span>
+                    <span className="font-mono">{brightness}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="60"
+                    max="140"
+                    step="5"
+                    value={brightness}
+                    onChange={(e) => onUpdateCardData({ brightness: parseInt(e.target.value) })}
+                    className="w-full accent-amber-600 h-1.5 bg-slate-200 rounded cursor-pointer"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center text-[11px] text-slate-600 mb-0.5">
+                    <span className="flex items-center gap-1">
+                      <Contrast className="w-3 h-3 text-indigo-500" /> Whole Card Contrast
+                    </span>
+                    <span className="font-mono">{contrast}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="60"
+                    max="140"
+                    step="5"
+                    value={contrast}
+                    onChange={(e) => onUpdateCardData({ contrast: parseInt(e.target.value) })}
+                    className="w-full accent-amber-600 h-1.5 bg-slate-200 rounded cursor-pointer"
+                  />
+                </div>
               </div>
-            )}
+
+              {/* Switch to Photo Enhancer callout banner */}
+              <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-950 space-y-1">
+                <div className="flex items-center gap-1 font-bold text-[11px]">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Face / Photo looks dark?</span>
+                </div>
+                <p className="text-[10px] text-slate-600 leading-tight">
+                  Use the <strong>"Clear Profile Photo Only"</strong> tab above to brighten shadows and clarify facial details without washing out text!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditorMode('photo_enhance');
+                    if (!photoEnhance.enabled) {
+                      onUpdateCardData({
+                        photoEnhance: {
+                          ...photoEnhance,
+                          enabled: true,
+                        },
+                      });
+                    }
+                  }}
+                  className="w-full py-1 text-center font-bold text-[10px] bg-amber-600 hover:bg-amber-500 text-white rounded transition"
+                >
+                  Open Photo Clarifier
+                </button>
+              </div>
+
+              {/* File Info */}
+              {fileName && (
+                <div className="p-2 rounded bg-slate-100 border border-slate-200 text-[11px] text-slate-600">
+                  <span className="font-semibold text-slate-700 block truncate" title={fileName}>
+                    Source: {fileName}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    Preserving 400+ DPI high resolution
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Primary Save Button */}
+          <div className="pt-2">
+            <button
+              type="button"
+              disabled={!sourceImageUrl || isProcessing}
+              onClick={handleSaveCrop}
+              className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-500 active:scale-[0.99] disabled:bg-slate-300 text-white font-bold rounded-lg shadow transition flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Check className="w-4 h-4" />
+              <span>{isProcessing ? 'Processing High-Res...' : `Apply & Save to ${side === 'front' ? 'Front' : 'Back'}`}</span>
+            </button>
           </div>
-
-          <button
-            type="button"
-            disabled={!sourceImageUrl || isProcessing}
-            onClick={handleSaveCrop}
-            className="w-full py-2.5 px-3 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-300 text-white font-bold rounded-lg shadow transition flex items-center justify-center gap-1.5"
-          >
-            <Check className="w-4 h-4" />
-            <span>Apply Crop to {side === 'front' ? 'Front' : 'Back'}</span>
-          </button>
         </div>
       </div>
     </div>
