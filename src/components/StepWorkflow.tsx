@@ -175,6 +175,22 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {alignment.placementMode === 'top_center' || (originYMm <= 40 && alignment.centerOnPage) ? (
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold shadow-xs">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Top &amp; Center Layout (Front &amp; Back)</span>
+              </span>
+            ) : alignment.placementMode === 'page_center' || alignment.centerOnPage ? (
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-blue-50 border border-blue-300 text-blue-800 rounded-lg text-xs font-bold shadow-xs">
+                <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                <span>Page Middle Layout (Front &amp; Back)</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-300 text-amber-800 rounded-lg text-xs font-medium">
+                <span>Manual Coordinates: X:{originXMm}mm, Y:{originYMm}mm</span>
+              </span>
+            )}
+
             <button
               onClick={onResetWorkflow}
               className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium px-2 py-1 rounded hover:bg-slate-100"
@@ -206,7 +222,11 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
                 <div>
                   <h3 className="font-bold text-base text-slate-900">STEP 1 — FRONT SIDE</h3>
                   <p className="text-xs text-slate-500">
-                    Exact {cardWidthMm} × {cardHeightMm} mm physical boundary
+                    {alignment.placementMode === 'top_center' || (originYMm <= 40 && alignment.centerOnPage)
+                      ? `Top & Centered: X=${originXMm}mm, Y=${originYMm}mm (${cardWidthMm}×${cardHeightMm}mm)`
+                      : alignment.centerOnPage
+                      ? `Centered on Page: X=${originXMm}mm, Y=${originYMm}mm (${cardWidthMm}×${cardHeightMm}mm)`
+                      : `Master Coordinates: X=${originXMm}mm, Y=${originYMm}mm`}
                   </p>
                 </div>
               </div>
@@ -349,7 +369,11 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
                 <div>
                   <h3 className="font-bold text-base text-slate-900">STEP 2 — BACK SIDE</h3>
                   <p className="text-xs text-slate-500">
-                    Exact same coordinates: X={originXMm}mm, Y={originYMm}mm
+                    {alignment.placementMode === 'top_center' || (originYMm <= 40 && alignment.centerOnPage)
+                      ? `Top & Centered: X=${originXMm}mm, Y=${originYMm}mm (Exact Top Center Match)`
+                      : alignment.centerOnPage
+                      ? `Centered on Page: X=${originXMm}mm, Y=${originYMm}mm (Identical Center)`
+                      : `Exact same coordinates: X=${originXMm}mm, Y=${originYMm}mm`}
                   </p>
                 </div>
               </div>

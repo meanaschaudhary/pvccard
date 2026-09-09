@@ -1,4 +1,4 @@
-import { AlignmentSettings, CalibrationSettings, BackFlipMode } from '../types';
+import { AlignmentSettings, CalibrationSettings, BackFlipMode, PlacementMode } from '../types';
 
 export interface PhysicalCardCoordinates {
   slotIndex: number;
@@ -18,12 +18,47 @@ export function calculateSlotCoordinates(
   calibration: CalibrationSettings
 ): PhysicalCardCoordinates[] {
   const coordinates: PhysicalCardCoordinates[] = [];
-  const { paperWidthMm, paperHeightMm, cardWidthMm, cardHeightMm, originXMm, originYMm, multiCardLayout, backSheetFlipType, backFlipMode, backOffsetX, backOffsetY } = alignment;
+  const {
+    paperWidthMm,
+    paperHeightMm,
+    cardWidthMm,
+    cardHeightMm,
+    placementMode,
+    centerOnPage,
+    topMarginMm,
+    originXMm,
+    originYMm,
+    multiCardLayout,
+    backSheetFlipType,
+    backFlipMode,
+    backOffsetX,
+    backOffsetY,
+  } = alignment;
 
   const rows = multiCardLayout.enabled ? Math.max(1, multiCardLayout.rows) : 1;
   const cols = multiCardLayout.enabled ? Math.max(1, multiCardLayout.columns) : 1;
   const gapX = multiCardLayout.enabled ? multiCardLayout.gapXMm : 0;
   const gapY = multiCardLayout.enabled ? multiCardLayout.gapYMm : 0;
+
+  const totalGridWidth = cols * cardWidthMm + (cols - 1) * gapX;
+  const totalGridHeight = rows * cardHeightMm + (rows - 1) * gapY;
+
+  // Placement mode calculation:
+  // 'top_center': Centered horizontally on the page, positioned at the TOP (originYMm / topMarginMm)
+  // 'page_center': Dead center of the entire sheet (both X and Y)
+  // 'custom': Freehand X and Y millimeters
+  let effectiveOriginX = originXMm;
+  let effectiveOriginY = originYMm;
+
+  const activeMode: PlacementMode = placementMode || (centerOnPage ? 'page_center' : 'custom');
+
+  if (activeMode === 'top_center') {
+    effectiveOriginX = Math.round(((paperWidthMm - totalGridWidth) / 2) * 10) / 10;
+    effectiveOriginY = topMarginMm !== undefined ? topMarginMm : originYMm;
+  } else if (activeMode === 'page_center') {
+    effectiveOriginX = Math.round(((paperWidthMm - totalGridWidth) / 2) * 10) / 10;
+    effectiveOriginY = Math.round(((paperHeightMm - totalGridHeight) / 2) * 10) / 10;
+  }
 
   const scale = calibration.scaleCorrectionPct / 100.0;
   const finalWidthMm = cardWidthMm * scale;
@@ -34,8 +69,8 @@ export function calculateSlotCoordinates(
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       // Base Front coordinates
-      const frontX = originXMm + c * (cardWidthMm + gapX) + calibration.offsetX;
-      const frontY = originYMm + r * (cardHeightMm + gapY) + calibration.offsetY;
+      const frontX = effectiveOriginX + c * (cardWidthMm + gapX) + calibration.offsetX;
+      const frontY = effectiveOriginY + r * (cardHeightMm + gapY) + calibration.offsetY;
 
       let xMm = frontX;
       let yMm = frontY;

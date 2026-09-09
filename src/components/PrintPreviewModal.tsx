@@ -124,8 +124,25 @@ export const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({
                   <span className="font-bold">{paperWidthMm} × {paperHeightMm} mm</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Master Origin (X, Y):</span>
-                  <span className="font-bold">{slots[0]?.xMm.toFixed(1)} mm, {slots[0]?.yMm.toFixed(1)} mm</span>
+                  <span className="text-slate-500">Placement Mode:</span>
+                  <span className={`font-bold ${alignment.placementMode === 'top_center' || (alignment.centerOnPage && alignment.originYMm <= 40) ? 'text-emerald-700' : alignment.placementMode === 'page_center' ? 'text-blue-700' : 'text-slate-800'}`}>
+                    {alignment.placementMode === 'top_center' || (alignment.centerOnPage && alignment.originYMm <= 40)
+                      ? 'Top & Center (Front & Back)'
+                      : alignment.placementMode === 'page_center' || alignment.centerOnPage
+                      ? 'Page Middle Center (Front & Back)'
+                      : 'Manual Offset'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Print Origin (X, Y):</span>
+                  <span className="font-bold">
+                    {slots[0]?.xMm.toFixed(1)} mm, {slots[0]?.yMm.toFixed(1)} mm
+                    {alignment.placementMode === 'top_center' || (alignment.centerOnPage && alignment.originYMm <= 40)
+                      ? ' (Top & Centered)'
+                      : alignment.placementMode === 'page_center' || alignment.centerOnPage
+                      ? ' (Page Middle)'
+                      : ''}
+                  </span>
                 </div>
                 {calibration.offsetX !== 0 || calibration.offsetY !== 0 ? (
                   <div className="flex justify-between text-emerald-700">

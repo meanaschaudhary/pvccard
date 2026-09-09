@@ -10,8 +10,11 @@ import {
   Copy,
   Info,
   Sparkles,
+  ArrowUpToLine,
+  AlignCenter,
+  CheckCircle2,
 } from 'lucide-react';
-import { AlignmentSettings, PaperSizeKey, BackFlipMode, BackSheetFlipType } from '../types';
+import { AlignmentSettings, PaperSizeKey, BackFlipMode, BackSheetFlipType, PlacementMode } from '../types';
 import { CARD_SIZE_PRESETS, PAPER_SIZE_PRESETS } from '../constants/presets';
 
 interface AlignmentControlsProps {
@@ -31,6 +34,9 @@ export const AlignmentControls: React.FC<AlignmentControlsProps> = ({
     paperHeightMm,
     cardWidthMm,
     cardHeightMm,
+    placementMode,
+    centerOnPage,
+    topMarginMm = 20.0,
     originXMm,
     originYMm,
     multiCardLayout,
@@ -41,14 +47,27 @@ export const AlignmentControls: React.FC<AlignmentControlsProps> = ({
     copies,
   } = alignment;
 
+  const currentPlacementMode: PlacementMode =
+    placementMode || (originYMm <= 40 ? 'top_center' : centerOnPage ? 'page_center' : 'custom');
+
   const handlePaperPresetChange = (key: PaperSizeKey) => {
     const preset = PAPER_SIZE_PRESETS.find((p) => p.key === key);
     if (preset && key !== 'custom') {
-      onUpdateAlignment({
+      const newW = preset.widthMm;
+      const newH = preset.heightMm;
+      const updates: Partial<AlignmentSettings> = {
         paperSizeKey: key,
-        paperWidthMm: preset.widthMm,
-        paperHeightMm: preset.heightMm,
-      });
+        paperWidthMm: newW,
+        paperHeightMm: newH,
+      };
+      if (currentPlacementMode === 'top_center') {
+        updates.originXMm = Math.round(((newW - cardWidthMm) / 2) * 10) / 10;
+        updates.originYMm = topMarginMm;
+      } else if (currentPlacementMode === 'page_center') {
+        updates.originXMm = Math.round(((newW - cardWidthMm) / 2) * 10) / 10;
+        updates.originYMm = Math.round(((newH - cardHeightMm) / 2) * 10) / 10;
+      }
+      onUpdateAlignment(updates);
     } else {
       onUpdateAlignment({ paperSizeKey: key });
     }
@@ -253,74 +272,298 @@ export const AlignmentControls: React.FC<AlignmentControlsProps> = ({
           </div>
         </div>
 
-        {/* Section 3: Master X/Y Coordinates */}
+        {/* Section 3: Master X/Y Coordinates & Placement Mode */}
         <div className="space-y-4 p-4 rounded-xl border border-slate-200 bg-slate-50/70">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-slate-800 flex items-center gap-1.5">
               <Compass className="w-4 h-4 text-emerald-600" />
-              <span>Master Origin Coordinates</span>
+              <span>Placement &amp; Position Engine</span>
             </h3>
+            {currentPlacementMode === 'top_center' ? (
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Top &amp; Center Active</span>
+              </span>
+            ) : currentPlacementMode === 'page_center' ? (
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+                Page Center Active
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                Custom Coordinates
+              </span>
+            )}
           </div>
 
-          <p className="text-[11px] text-slate-500">
-            Position of Card #1 relative to the top-left edge of the paper or tray in millimeters.
-          </p>
+          {/* Placement Mode Selector Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {/* Mode 1: Top & Center */}
+            <button
+              type="button"
+              onClick={() => {
+                const cx = Math.max(0, (paperWidthMm - cardWidthMm) / 2);
+                const tm = topMarginMm || 20.0;
+                onUpdateAlignment({
+                  placementMode: 'top_center',
+                  centerOnPage: true,
+                  originXMm: Math.round(cx * 10) / 10,
+                  originYMm: tm,
+                  topMarginMm: tm,
+                });
+              }}
+              className={`p-3 rounded-xl border text-left transition flex flex-col justify-between ${
+                currentPlacementMode === 'top_center'
+                  ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                  : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1">
+                    <ArrowUpToLine className={`w-3.5 h-3.5 ${currentPlacementMode === 'top_center' ? 'text-emerald-600' : 'text-slate-500'}`} />
+                    <span>Top &amp; Center</span>
+                  </span>
+                  {currentPlacementMode === 'top_center' && (
+                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded">Active</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Centered horizontally, placed at the <strong>top</strong> of the sheet (X: {Math.round(((paperWidthMm - cardWidthMm) / 2) * 10) / 10}mm, Y: {originYMm}mm).
+                </p>
+              </div>
+            </button>
 
+            {/* Mode 2: Center of Page */}
+            <button
+              type="button"
+              onClick={() => {
+                const cx = Math.max(0, (paperWidthMm - cardWidthMm) / 2);
+                const cy = Math.max(0, (paperHeightMm - cardHeightMm) / 2);
+                onUpdateAlignment({
+                  placementMode: 'page_center',
+                  centerOnPage: true,
+                  originXMm: Math.round(cx * 10) / 10,
+                  originYMm: Math.round(cy * 10) / 10,
+                });
+              }}
+              className={`p-3 rounded-xl border text-left transition flex flex-col justify-between ${
+                currentPlacementMode === 'page_center'
+                  ? 'bg-blue-50/80 border-blue-500 ring-2 ring-blue-500/20 shadow-xs'
+                  : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1">
+                    <AlignCenter className={`w-3.5 h-3.5 ${currentPlacementMode === 'page_center' ? 'text-blue-600' : 'text-slate-500'}`} />
+                    <span>Middle of Page</span>
+                  </span>
+                  {currentPlacementMode === 'page_center' && (
+                    <span className="text-[9px] font-bold text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded">Active</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Dead center of entire sheet (X: {Math.round(((paperWidthMm - cardWidthMm) / 2) * 10) / 10}mm, Y: {Math.round(((paperHeightMm - cardHeightMm) / 2) * 10) / 10}mm).
+                </p>
+              </div>
+            </button>
+
+            {/* Mode 3: Custom Coordinates */}
+            <button
+              type="button"
+              onClick={() => {
+                onUpdateAlignment({
+                  placementMode: 'custom',
+                  centerOnPage: false,
+                });
+              }}
+              className={`p-3 rounded-xl border text-left transition flex flex-col justify-between ${
+                currentPlacementMode === 'custom'
+                  ? 'bg-amber-50/80 border-amber-500 ring-2 ring-amber-500/20 shadow-xs'
+                  : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1">
+                    <Sliders className={`w-3.5 h-3.5 ${currentPlacementMode === 'custom' ? 'text-amber-600' : 'text-slate-500'}`} />
+                    <span>Custom Position</span>
+                  </span>
+                  {currentPlacementMode === 'custom' && (
+                    <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">Active</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 leading-snug">
+                  Manual coordinates for trays or custom offset margins.
+                </p>
+              </div>
+            </button>
+          </div>
+
+          {/* Top Margin Quick Selectors (when Top & Center is active) */}
+          {currentPlacementMode === 'top_center' && (
+            <div className="p-3 bg-white rounded-lg border border-emerald-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
+                  <ArrowUpToLine className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Top Margin Distance</span>
+                </span>
+                <span className="text-xs font-mono font-bold text-emerald-700">
+                  {originYMm} mm from top edge
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {[10, 15, 20, 25, 30].map((marginVal) => (
+                  <button
+                    key={marginVal}
+                    type="button"
+                    onClick={() => {
+                      onUpdateAlignment({
+                        originYMm: marginVal,
+                        topMarginMm: marginVal,
+                        placementMode: 'top_center',
+                        centerOnPage: true,
+                        originXMm: Math.round(((paperWidthMm - cardWidthMm) / 2) * 10) / 10,
+                      });
+                    }}
+                    className={`px-2.5 py-1 text-xs rounded font-medium transition ${
+                      originYMm === marginVal
+                        ? 'bg-emerald-600 text-white font-bold shadow-xs'
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    {marginVal} mm {marginVal === 20 ? '(Standard)' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Coordinate Inputs */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-600 font-semibold mb-1">Origin X (Left mm)</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-600 font-semibold">Origin X (Left mm)</label>
+                {currentPlacementMode === 'top_center' || currentPlacementMode === 'page_center' ? (
+                  <span className="text-[9px] text-emerald-600 font-bold">Centered</span>
+                ) : null}
+              </div>
               <input
                 type="number"
                 step="0.5"
                 min="0"
                 max="300"
                 value={originXMm}
-                onChange={(e) => onUpdateAlignment({ originXMm: parseFloat(e.target.value) || 0 })}
-                className="w-full px-2.5 py-1.5 font-mono bg-white border border-slate-300 rounded-md"
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  onUpdateAlignment({
+                    originXMm: val,
+                    placementMode: 'custom',
+                    centerOnPage: false,
+                  });
+                }}
+                className={`w-full px-2.5 py-1.5 font-mono border rounded-md ${
+                  currentPlacementMode === 'top_center' || currentPlacementMode === 'page_center'
+                    ? 'bg-emerald-50/50 border-emerald-300 text-emerald-950 font-bold'
+                    : 'bg-white border-slate-300 text-slate-800'
+                }`}
               />
             </div>
             <div>
-              <label className="block text-slate-600 font-semibold mb-1">Origin Y (Top mm)</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-slate-600 font-semibold">Origin Y (Top mm)</label>
+                {currentPlacementMode === 'top_center' ? (
+                  <span className="text-[9px] text-emerald-600 font-bold">Top Margin</span>
+                ) : currentPlacementMode === 'page_center' ? (
+                  <span className="text-[9px] text-blue-600 font-bold">Centered</span>
+                ) : null}
+              </div>
               <input
                 type="number"
                 step="0.5"
                 min="0"
                 max="300"
                 value={originYMm}
-                onChange={(e) => onUpdateAlignment({ originYMm: parseFloat(e.target.value) || 0 })}
-                className="w-full px-2.5 py-1.5 font-mono bg-white border border-slate-300 rounded-md"
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  if (currentPlacementMode === 'top_center') {
+                    onUpdateAlignment({
+                      originYMm: val,
+                      topMarginMm: val,
+                    });
+                  } else {
+                    onUpdateAlignment({
+                      originYMm: val,
+                      placementMode: 'custom',
+                      centerOnPage: false,
+                    });
+                  }
+                }}
+                className={`w-full px-2.5 py-1.5 font-mono border rounded-md ${
+                  currentPlacementMode === 'top_center'
+                    ? 'bg-emerald-50/50 border-emerald-300 text-emerald-950 font-bold'
+                    : currentPlacementMode === 'page_center'
+                    ? 'bg-blue-50/50 border-blue-300 text-blue-950 font-bold'
+                    : 'bg-white border-slate-300 text-slate-800'
+                }`}
               />
             </div>
           </div>
 
           {/* Quick preset positions */}
           <div>
-            <span className="block text-slate-500 text-[10px] uppercase font-bold mb-1">Quick Placements</span>
+            <span className="block text-slate-500 text-[10px] uppercase font-bold mb-1">Quick Alignment Shortcuts</span>
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"
-                onClick={() => onUpdateAlignment({ originXMm: 20, originYMm: 30 })}
-                className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 font-medium text-[11px]"
+                onClick={() => {
+                  const cx = Math.max(0, (paperWidthMm - cardWidthMm) / 2);
+                  onUpdateAlignment({
+                    placementMode: 'top_center',
+                    centerOnPage: true,
+                    originXMm: Math.round(cx * 10) / 10,
+                    originYMm: 20.0,
+                    topMarginMm: 20.0,
+                  });
+                }}
+                className={`px-2.5 py-1 rounded font-bold text-[11px] transition flex items-center gap-1 ${
+                  currentPlacementMode === 'top_center' && originYMm === 20
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-white border border-emerald-400 text-emerald-700 hover:bg-emerald-50'
+                }`}
               >
-                Top-Left (20, 30)
+                <ArrowUpToLine className="w-3 h-3" />
+                <span>Top &amp; Center (X: {Math.round(((paperWidthMm - cardWidthMm) / 2) * 10) / 10}mm, Y: 20mm)</span>
               </button>
               <button
                 type="button"
                 onClick={() => {
                   const cx = Math.max(0, (paperWidthMm - cardWidthMm) / 2);
                   const cy = Math.max(0, (paperHeightMm - cardHeightMm) / 2);
-                  onUpdateAlignment({ originXMm: Math.round(cx * 10) / 10, originYMm: Math.round(cy * 10) / 10 });
+                  onUpdateAlignment({
+                    placementMode: 'page_center',
+                    centerOnPage: true,
+                    originXMm: Math.round(cx * 10) / 10,
+                    originYMm: Math.round(cy * 10) / 10,
+                  });
                 }}
-                className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 font-medium text-[11px]"
+                className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 font-medium text-[11px] text-slate-700"
               >
-                Center Page
+                Middle of Page ({Math.round(((paperHeightMm - cardHeightMm) / 2) * 10) / 10}mm)
               </button>
               <button
                 type="button"
-                onClick={() => onUpdateAlignment({ originXMm: 25, originYMm: 35 })}
-                className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 font-medium text-[11px]"
+                onClick={() =>
+                  onUpdateAlignment({
+                    originXMm: 25,
+                    originYMm: 35,
+                    placementMode: 'custom',
+                    centerOnPage: false,
+                  })
+                }
+                className="px-2 py-1 bg-white border border-slate-200 rounded hover:bg-slate-100 font-medium text-[11px] text-slate-700"
               >
-                Canon Tray Slot 1
+                Canon Tray Slot 1 (25, 35)
               </button>
             </div>
           </div>

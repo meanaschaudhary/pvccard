@@ -54,12 +54,17 @@ export interface CardSlot {
   back: CardSideData;
 }
 
+export type PlacementMode = 'top_center' | 'page_center' | 'custom';
+
 export interface AlignmentSettings {
   paperSizeKey: PaperSizeKey;
   paperWidthMm: number;
   paperHeightMm: number;
   cardWidthMm: number;
   cardHeightMm: number;
+  placementMode: PlacementMode; // 'top_center' = horizontally centered at top of page; 'page_center' = dead center; 'custom' = manual coordinates
+  centerOnPage: boolean; // Kept for backwards compatibility
+  topMarginMm: number; // Top position when top_center is active (default 20mm)
   originXMm: number; // Left position of Card 1
   originYMm: number; // Top position of Card 1
   multiCardLayout: {

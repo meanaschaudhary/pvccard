@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ZoomIn, ZoomOut, Maximize, Move, Layers, Eye, ShieldAlert, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize, Move, Layers, Eye, ShieldAlert, Sparkles, CheckCircle2, ArrowUpToLine, AlignCenter } from 'lucide-react';
 import { AlignmentSettings, CalibrationSettings, CardSideData } from '../types';
 import { calculateSlotCoordinates } from '../utils/printHelper';
 
@@ -87,8 +87,39 @@ export const PrintBedPreview: React.FC<PrintBedPreviewProps> = ({
           </button>
         </div>
 
-        {/* Zoom & Rulers */}
+        {/* Zoom & Placement Shortcuts */}
         <div className="flex items-center gap-2">
+          {onUpdateOrigin && (
+            <>
+              <button
+                onClick={() => {
+                  const cx = Math.max(0, (paperWidthMm - cardWidthMm) / 2);
+                  onUpdateOrigin(Math.round(cx * 10) / 10, 20.0);
+                }}
+                className={`px-2.5 py-1 rounded text-[11px] font-bold transition flex items-center gap-1 ${
+                  originYMm === 20 && Math.abs(originXMm - (paperWidthMm - cardWidthMm) / 2) < 1
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-emerald-600/30 border border-emerald-500 text-emerald-300 hover:bg-emerald-600/50'
+                }`}
+                title="Align card horizontally centered at top of page (20mm)"
+              >
+                <ArrowUpToLine className="w-3 h-3" />
+                <span>Top &amp; Center (20mm)</span>
+              </button>
+              <button
+                onClick={() => {
+                  const cx = Math.max(0, (paperWidthMm - cardWidthMm) / 2);
+                  const cy = Math.max(0, (paperHeightMm - cardHeightMm) / 2);
+                  onUpdateOrigin(Math.round(cx * 10) / 10, Math.round(cy * 10) / 10);
+                }}
+                className="px-2 py-1 rounded text-[11px] font-medium bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1"
+                title="Align card to exact center of page"
+              >
+                <AlignCenter className="w-3 h-3" />
+                <span>Page Middle</span>
+              </button>
+            </>
+          )}
           <button
             onClick={() => setShowRulers(!showRulers)}
             className={`px-2 py-1 rounded text-[11px] font-medium border ${
@@ -184,6 +215,36 @@ export const PrintBedPreview: React.FC<PrintBedPreviewProps> = ({
             </>
           )}
 
+          {/* Center Guide Lines to visualize exact page alignment */}
+          <div
+            className="absolute top-0 bottom-0 border-l border-dashed border-emerald-400/40 pointer-events-none z-10"
+            style={{ left: `${(paperWidthMm / 2) * baseScale}px` }}
+          >
+            <span className="absolute top-2 left-1 text-[8px] font-mono font-bold text-emerald-600/70 bg-emerald-50 px-1 rounded">
+              Page Center X: {(paperWidthMm / 2).toFixed(1)}mm
+            </span>
+          </div>
+
+          {originYMm <= 50 ? (
+            <div
+              className="absolute left-0 right-0 border-t border-dashed border-emerald-500/50 pointer-events-none z-10"
+              style={{ top: `${originYMm * baseScale}px` }}
+            >
+              <span className="absolute left-2 top-0.5 text-[8px] font-mono font-bold text-emerald-700 bg-emerald-50 px-1 rounded shadow-xs">
+                Top Margin Y: {originYMm.toFixed(1)}mm (Top &amp; Center)
+              </span>
+            </div>
+          ) : (
+            <div
+              className="absolute left-0 right-0 border-t border-dashed border-emerald-400/40 pointer-events-none z-10"
+              style={{ top: `${(paperHeightMm / 2) * baseScale}px` }}
+            >
+              <span className="absolute left-2 top-1 text-[8px] font-mono font-bold text-emerald-600/70 bg-emerald-50 px-1 rounded">
+                Page Center Y: {(paperHeightMm / 2).toFixed(1)}mm
+              </span>
+            </div>
+          )}
+
           {/* Opposite Side Ghost Overlay (if enabled) for registration check */}
           {showOverlayGhost &&
             oppositeSlots.map((oppSlot, idx) => (
@@ -269,6 +330,17 @@ export const PrintBedPreview: React.FC<PrintBedPreviewProps> = ({
           <span className="font-mono bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
             X = {originXMm.toFixed(1)} mm | Y = {originYMm.toFixed(1)} mm
           </span>
+          {alignment.placementMode === 'top_center' || (originYMm <= 50 && Math.abs(originXMm - (paperWidthMm - cardWidthMm) / 2) < 2) ? (
+            <span className="font-mono font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-700/60 flex items-center gap-1 text-[11px]">
+              <CheckCircle2 className="w-3 h-3" />
+              <span>TOP &amp; CENTERED</span>
+            </span>
+          ) : alignment.placementMode === 'page_center' || alignment.centerOnPage ? (
+            <span className="font-mono font-bold text-blue-400 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-700/60 flex items-center gap-1 text-[11px]">
+              <CheckCircle2 className="w-3 h-3" />
+              <span>PAGE CENTERED</span>
+            </span>
+          ) : null}
           <span className="font-mono bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
             Size = {cardWidthMm} × {cardHeightMm} mm
           </span>

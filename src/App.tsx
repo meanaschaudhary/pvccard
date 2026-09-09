@@ -130,11 +130,20 @@ export default function App() {
 
   // Preset Card Size Apply
   const handleApplyPresetCardSize = (widthMm: number, heightMm: number) => {
-    setAlignment((prev) => ({
-      ...prev,
-      cardWidthMm: widthMm,
-      cardHeightMm: heightMm,
-    }));
+    setAlignment((prev) => {
+      const updates: Partial<AlignmentSettings> = {
+        cardWidthMm: widthMm,
+        cardHeightMm: heightMm,
+      };
+      if (prev.centerOnPage) {
+        updates.originXMm = Math.round(((prev.paperWidthMm - widthMm) / 2) * 10) / 10;
+        updates.originYMm = Math.round(((prev.paperHeightMm - heightMm) / 2) * 10) / 10;
+      }
+      return {
+        ...prev,
+        ...updates,
+      };
+    });
   };
 
   // Print Handlers

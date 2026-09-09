@@ -17,7 +17,13 @@ export function loadSavedProfiles(): PrinterProfile[] {
       return DEFAULT_PROFILES;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_PROFILES;
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_PROFILES;
+    const hasTopCenter = parsed.some((p: PrinterProfile) => p.id === 'canon_a4_top_center');
+    if (!hasTopCenter) {
+      saveProfiles(DEFAULT_PROFILES);
+      return DEFAULT_PROFILES;
+    }
+    return parsed;
   } catch (e) {
     console.error('Failed to load profiles from localStorage', e);
     return DEFAULT_PROFILES;
@@ -36,7 +42,17 @@ export function loadActiveAlignment(): AlignmentSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.CURRENT_ALIGNMENT);
     if (!raw) return DEFAULT_ALIGNMENT;
-    return { ...DEFAULT_ALIGNMENT, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    const merged: AlignmentSettings = { ...DEFAULT_ALIGNMENT, ...parsed };
+    // If placementMode is undefined or if it has dead-center coordinates (X:65, Y:123.5), default to top_center
+    if (!merged.placementMode || (merged.originYMm === 123.5 && merged.paperSizeKey === 'a4')) {
+      merged.placementMode = 'top_center';
+      merged.topMarginMm = 20.0;
+      merged.originXMm = Math.round(((merged.paperWidthMm - merged.cardWidthMm) / 2) * 10) / 10;
+      merged.originYMm = 20.0;
+      merged.centerOnPage = true;
+    }
+    return merged;
   } catch {
     return DEFAULT_ALIGNMENT;
   }
