@@ -91,7 +91,7 @@ export const CardEditor: React.FC<CardEditorProps> = ({
         doc = info.pdfDoc;
         setPdfDoc(doc);
       }
-      const rendered = await renderPdfPageToDataUrl(doc, newPage, 3.5);
+      const rendered = await renderPdfPageToDataUrl(doc, newPage, 4.0);
       onUpdateCardData({
         sourceImageUrl: rendered.dataUrl,
         selectedPdfPage: newPage,
@@ -131,12 +131,14 @@ export const CardEditor: React.FC<CardEditorProps> = ({
     setIsDragging(false);
   };
 
-  // Zoom wheel
+  // Zoom wheel (smooth scaling up to 2500% / 25x for full A4 PDF documents)
   const handleWheel = (e: React.WheelEvent) => {
     if (!sourceImageUrl || editorMode === 'photo_enhance') return;
     e.preventDefault();
-    const zoomDelta = e.deltaY < 0 ? 0.08 : -0.08;
-    const newZoom = Math.min(5, Math.max(0.2, crop.zoom + zoomDelta));
+    // Dynamic wheel step scaling: smooth at low zoom, faster at high zoom
+    const zoomStep = Math.max(0.08, crop.zoom * 0.08);
+    const zoomDelta = e.deltaY < 0 ? zoomStep : -zoomStep;
+    const newZoom = Math.min(25, Math.max(0.2, crop.zoom + zoomDelta));
     onUpdateCardData({
       crop: {
         ...crop,
@@ -146,10 +148,11 @@ export const CardEditor: React.FC<CardEditorProps> = ({
   };
 
   const handleZoomChange = (val: number) => {
+    const clamped = Math.min(25, Math.max(0.2, Number(val.toFixed(2))));
     onUpdateCardData({
       crop: {
         ...crop,
-        zoom: val,
+        zoom: clamped,
       },
     });
   };
@@ -466,41 +469,108 @@ export const CardEditor: React.FC<CardEditorProps> = ({
           ) : (
             /* Standard Card Framing & Cropping Controls */
             <div className="space-y-4">
-              {/* Zoom Slider */}
+              {/* Ultra High-Capacity Zoom Controls (up to 2500% / 25x for full A4 PDF documents) */}
               <div>
                 <div className="flex justify-between items-center mb-1 text-slate-700 font-semibold">
                   <span className="flex items-center gap-1">
-                    <ZoomIn className="w-3.5 h-3.5 text-slate-500" /> Card Zoom Level
+                    <ZoomIn className="w-3.5 h-3.5 text-slate-500" /> Zoom Level (Up to 2500%)
                   </span>
-                  <span className="font-mono text-[11px] text-slate-600">
-                    {(crop.zoom * 100).toFixed(0)}%
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="20"
+                      max="2500"
+                      step="10"
+                      value={Math.round(crop.zoom * 100)}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val)) {
+                          handleZoomChange(val / 100);
+                        }
+                      }}
+                      className="w-16 px-1.5 py-0.5 text-right font-mono text-[11px] font-bold bg-white border border-slate-300 rounded focus:ring-1 focus:ring-amber-500"
+                    />
+                    <span className="font-mono text-[11px] text-slate-600">%</span>
+                    {crop.zoom !== 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleZoomChange(1.0)}
+                        className="text-[10px] text-amber-800 bg-amber-100 hover:bg-amber-200 px-1.5 py-0.5 rounded font-semibold transition"
+                        title="Reset zoom to 100%"
+                      >
+                        100%
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
+
+                {/* Slider + Step Buttons */}
+                <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => handleZoomChange(Math.max(0.2, crop.zoom - 0.1))}
-                    className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-100"
+                    onClick={() => {
+                      const step = crop.zoom >= 5 ? 1.0 : crop.zoom >= 2 ? 0.5 : 0.1;
+                      handleZoomChange(Math.max(0.2, crop.zoom - step));
+                    }}
+                    className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-100 active:bg-slate-200"
+                    title="Zoom Out"
                   >
                     <ZoomOut className="w-3.5 h-3.5 text-slate-600" />
                   </button>
                   <input
                     type="range"
                     min="0.2"
-                    max="3"
-                    step="0.05"
+                    max="25"
+                    step={crop.zoom >= 5 ? '0.2' : '0.05'}
                     value={crop.zoom}
                     onChange={(e) => handleZoomChange(parseFloat(e.target.value))}
                     className="flex-1 accent-amber-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                   />
                   <button
                     type="button"
-                    onClick={() => handleZoomChange(Math.min(3, crop.zoom + 0.1))}
-                    className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-100"
+                    onClick={() => {
+                      const step = crop.zoom >= 5 ? 1.0 : crop.zoom >= 2 ? 0.5 : 0.1;
+                      handleZoomChange(Math.min(25, crop.zoom + step));
+                    }}
+                    className="p-1 bg-white border border-slate-200 rounded hover:bg-slate-100 active:bg-slate-200"
+                    title="Zoom In"
                   >
                     <ZoomIn className="w-3.5 h-3.5 text-slate-600" />
                   </button>
                 </div>
+
+                {/* Quick 1-Click Zoom Presets for PDFs */}
+                <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                  {[
+                    { label: '100%', val: 1.0 },
+                    { label: '250%', val: 2.5 },
+                    { label: '500%', val: 5.0 },
+                    { label: '800%', val: 8.0 },
+                    { label: '1200%', val: 12.0 },
+                    { label: '1600%', val: 16.0 },
+                    { label: '2000%', val: 20.0 },
+                    { label: '2500%', val: 25.0 },
+                  ].map((p) => {
+                    const isSelected = Math.abs(crop.zoom - p.val) < 0.05;
+                    return (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => handleZoomChange(p.val)}
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-medium transition ${
+                          isSelected
+                            ? 'bg-amber-500 text-slate-950 font-bold shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <span className="block text-[10px] text-slate-400 mt-1">
+                  💡 High-capacity zoom (up to <strong>2500% / 25×</strong>) for cropping small card sections from full A4 PDFs.
+                </span>
               </div>
 
               {/* Rotation & Flips */}

@@ -103,8 +103,8 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
     try {
       if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
         const { numPages, pdfDoc } = await loadPdfDocument(file, password);
-        // Render first page at high-res 3.5 scale (~350 DPI)
-        const rendered = await renderPdfPageToDataUrl(pdfDoc, 1, 3.5);
+        // Render first page at ultra high-res 4.0 scale (~400 DPI)
+        const rendered = await renderPdfPageToDataUrl(pdfDoc, 1, 4.0);
 
         // Pre-render cropped version
         const highRes = await renderHighResCardImage(
@@ -213,7 +213,7 @@ export const StepWorkflow: React.FC<StepWorkflowProps> = ({
     setIsProcessingFile('back');
     try {
       const { pdfDoc } = await loadPdfDocument(multiPageOffer.file, multiPageOffer.password);
-      const rendered = await renderPdfPageToDataUrl(pdfDoc, 2, 3.5);
+      const rendered = await renderPdfPageToDataUrl(pdfDoc, 2, 4.0);
       const highRes = await renderHighResCardImage(
         rendered.dataUrl,
         {

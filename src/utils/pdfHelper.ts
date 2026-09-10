@@ -100,12 +100,12 @@ export async function loadPdfDocument(
 
 /**
  * Render a specific page from a loaded PDF document to high-resolution image data URL.
- * Scale of 3.0 or 4.0 gives ~300 DPI quality for razor-sharp text and QR codes.
+ * Scale of 4.0 gives ~350-400 DPI quality for razor-sharp text and QR codes even when zoomed into small sections.
  */
 export async function renderPdfPageToDataUrl(
   pdfDoc: pdfjsLib.PDFDocumentProxy,
   pageNumber: number,
-  scale: number = 3.5
+  scale: number = 4.0
 ): Promise<{ dataUrl: string; width: number; height: number }> {
   const page = await pdfDoc.getPage(pageNumber);
   const viewport = page.getViewport({ scale });
